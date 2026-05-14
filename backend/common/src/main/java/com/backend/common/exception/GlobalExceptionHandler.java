@@ -1,24 +1,26 @@
-// common/src/main/java/com/backend/common/exception/GlobalExceptionHandler.java
-
 package com.backend.common.exception;
 
-import org.springframework.http.*;
-import org.springframework.security.authentication.*;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.web.bind.annotation.*;
-import jakarta.validation.*;
 import org.springframework.validation.FieldError;
-import org.springframework.web.bind.*;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 
 import java.time.LocalDateTime;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.HashMap;
+import java.util.Map;
 
-// common/src/main/java/com/backend/common/exception/GlobalExceptionHandler.java
-
+/**
+ * Centralized exception interception for all microservices.
+ * Formats all backend exceptions into a predictable JSON schema for the Angular frontend.
+ */
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -27,95 +29,70 @@ public class GlobalExceptionHandler {
     private static final String ERROR = "error";
     private static final String MESSAGE = "message";
 
-    // ────────────────────────────────────────────────────────────────
-    // 1. Custom Exceptions
-    // ────────────────────────────────────────────────────────────────
+    /**
+     * Handles manually thrown business logic exceptions.
+     */
     @ExceptionHandler(CustomException.class)
     public ResponseEntity<Map<String, Object>> handleCustom(CustomException ex) {
+        log.warn("Business rule exception ({}): {}", ex.getStatus(), ex.getMessage());
         return buildResponse(ex.getStatus(), ex.getMessage());
     }
 
-    // ────────────────────────────────────────────────────────────────
-    // 2. Spring Security Authentication Exceptions
-    // ────────────────────────────────────────────────────────────────
-    @ExceptionHandler(BadCredentialsException.class)
-    public ResponseEntity<Map<String, Object>> handleBadCredentials(BadCredentialsException ex) {
-        return buildResponse(HttpStatus.UNAUTHORIZED, "Invalid username or password");
-    }
-
-    @ExceptionHandler(UsernameNotFoundException.class)
-    public ResponseEntity<Map<String, Object>> handleUsernameNotFound(UsernameNotFoundException ex) {
-        return buildResponse(HttpStatus.UNAUTHORIZED, ex.getMessage());
-    }
-
-    @ExceptionHandler(DisabledException.class)
-    public ResponseEntity<Map<String, Object>> handleDisabled(DisabledException ex) {
-        return buildResponse(HttpStatus.FORBIDDEN, "User account is disabled");
-    }
-
-    @ExceptionHandler(LockedException.class)
-    public ResponseEntity<Map<String, Object>> handleLocked(LockedException ex) {
-        return buildResponse(HttpStatus.FORBIDDEN, "User account is locked");
-    }
-
-    @ExceptionHandler(AccountExpiredException.class)
-    public ResponseEntity<Map<String, Object>> handleAccountExpired(AccountExpiredException ex) {
-        return buildResponse(HttpStatus.FORBIDDEN, "User account has expired");
-    }
-
-    @ExceptionHandler(CredentialsExpiredException.class)
-    public ResponseEntity<Map<String, Object>> handleCredentialsExpired(CredentialsExpiredException ex) {
-        return buildResponse(HttpStatus.FORBIDDEN, "User credentials have expired");
-    }
-
-    // ────────────────────────────────────────────────────────────────
-    // 3. Spring Validation Exceptions
-    // ────────────────────────────────────────────────────────────────
+    /**
+     * Handles Spring validation errors (e.g., @NotBlank, @Email in DTOs).
+     */
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, Object>> handleMethodArgumentNotValid(
-            MethodArgumentNotValidException ex) {
-        Map<String, String> errors = new HashMap<>();
-        ex.getBindingResult().getAllErrors().forEach(error -> {
-            String fieldName = error instanceof FieldError ? ((FieldError) error).getField() : error.getObjectName();
-            String errorMessage = error.getDefaultMessage();
-            errors.put(fieldName, errorMessage);
-        });
-        return buildFieldErrorResponse(HttpStatus.BAD_REQUEST, errors);
+    public ResponseEntity<Map<String, Object>> handleValidation(MethodArgumentNotValidException ex) {
+        Map<String, String> validationErrors = new HashMap<>();
+        
+        for (FieldError fieldError : ex.getBindingResult().getFieldErrors()) {
+            validationErrors.put(fieldError.getField(), fieldError.getDefaultMessage());
+        }
+        
+        log.warn("Payload validation failed: {}", validationErrors);
+        return buildFieldErrorResponse(HttpStatus.BAD_REQUEST, validationErrors);
     }
 
-    // ────────────────────────────────────────────────────────────────
-    // 4. File Upload Exceptions
-    // ────────────────────────────────────────────────────────────────
+    /**
+     * Handles file size limit breaches in the media-service.
+     */
     @ExceptionHandler(MaxUploadSizeExceededException.class)
-    public ResponseEntity<Map<String, Object>> handleMaxUploadSizeExceeded(
-            MaxUploadSizeExceededException ex) {
-        return buildResponse(HttpStatus.PAYLOAD_TOO_LARGE, "File size exceeds the maximum limit.");
+    public ResponseEntity<Map<String, Object>> handleMaxSizeException(MaxUploadSizeExceededException ex) {
+        log.warn("File upload blocked: Max upload size exceeded.");
+        return buildResponse(HttpStatus.PAYLOAD_TOO_LARGE, "The uploaded file exceeds the maximum allowed size.");
     }
 
-    @ExceptionHandler(InvalidFileTypeException.class)
-    public ResponseEntity<Map<String, Object>> handleInvalidFileType(InvalidFileTypeException ex) {
-        return buildResponse(HttpStatus.UNSUPPORTED_MEDIA_TYPE, ex.getMessage());
+    /**
+     * Handles Spring Security authentication failures from Gateway/Services.
+     */
+    @ExceptionHandler({AuthenticationException.class, UsernameNotFoundException.class})
+    public ResponseEntity<Map<String, Object>> handleAuthenticationException(RuntimeException ex) {
+        log.warn("Authentication failed: {}", ex.getMessage());
+        return buildResponse(HttpStatus.UNAUTHORIZED, "Invalid credentials or token.");
     }
 
-    // ────────────────────────────────────────────────────────────────
-    // 5. 404 Not Found Exceptions
-    // ────────────────────────────────────────────────────────────────
+    /**
+     * Handles requests made to endpoints that do not exist.
+     */
     @ExceptionHandler(NoHandlerFoundException.class)
-    public ResponseEntity<Map<String, Object>> handleNoHandlerFound(NoHandlerFoundException ex) {
+    public ResponseEntity<Map<String, Object>> handleNotFound(NoHandlerFoundException ex) {
+        log.warn("Endpoint not found: {}", ex.getRequestURL());
         return buildResponse(HttpStatus.NOT_FOUND, "The requested resource was not found.");
     }
 
-    // ────────────────────────────────────────────────────────────────
-    // 6. Catch-All Exception Handler
-    // ────────────────────────────────────────────────────────────────
+    /**
+     * Catch-All for unhandled system crashes or NullPointerExceptions.
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGenericException(Exception ex) {
-        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred.");
+        log.error("CRITICAL: Unhandled internal server error occurred.", ex);
+        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred on the server.");
     }
 
     // ─────────────────────────────────────────────────────────────────
-    // Helper Methods
+    // Helper Methods (Frontend JSON Contract)
     // ─────────────────────────────────────────────────────────────────
+
     private ResponseEntity<Map<String, Object>> buildResponse(HttpStatus status, String message) {
         Map<String, Object> body = new HashMap<>();
         body.put(TIMESTAMP, LocalDateTime.now());

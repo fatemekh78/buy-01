@@ -2,9 +2,13 @@ package com.backend.common.entity;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
+import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import lombok.AllArgsConstructor;
@@ -13,8 +17,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Seller Profile Entity - Stores seller statistics and performance metrics
- * Linked to User entity via sellerId (where user has SELLER role)
+ * Entity representing a Seller's statistical and performance profile in
+ * MongoDB.
+ * Maintains a 1:1 relationship with a User entity possessing the SELLER role.
  */
 @Builder
 @Data
@@ -26,46 +31,103 @@ public class SellerProfile {
     @Id
     private String id;
 
-    // Link to seller user
+    /**
+     * Unique identifier linking to the primary User account.
+     * Indexed as unique to enforce the 1:1 relationship and optimize query
+     * performance.
+     */
+    @Indexed(unique = true)
     private String sellerId;
-    private String sellerName; // Name for quick access
 
-    // Business Statistics
-    private BigDecimal totalRevenue; // Sum of all sales
-    private Integer totalSales; // Count of items sold
-    private Integer totalOrders; // Count of completed orders
-    private Integer totalCustomers; // Count of unique customers
+    /**
+     * Display name of the shop for quick access without querying the User database.
+     */
+    private String sellerName;
 
-    // Best Performing Products
-    private String bestSellingProductId; // Most sold product
-    private String bestSellingProductName; // Name for quick access
-    private Integer bestSellingProductCount;// Units sold of best product
+    // --- Business Statistics ---
 
-    // Ratings & Reviews
-    private Double averageRating; // Average seller rating (1-5)
-    private Integer totalReviews; // Count of reviews received
-    private Integer totalFiveStarReviews; // Count of 5-star reviews
-    private Integer totalOneStarReviews; // Count of 1-star reviews
+    @Builder.Default
+    private BigDecimal totalRevenue = BigDecimal.ZERO;
 
-    // Shop Info
-    private String shopDescription; // Seller's business description
-    private String shopLogoUrl; // Logo/avatar URL
-    private Boolean isVerified; // Seller verification status
-    private Boolean isActive; // Shop active status
+    @Builder.Default
+    private Integer totalSales = 0;
 
-    // Performance Metrics
-    private Double deliveryRating; // On-time delivery rating
-    private Double communicationRating; // Responsiveness rating
-    private Integer returnRate; // Return percentage (0-100)
-    private Integer cancellationRate; // Cancellation percentage (0-100)
+    @Builder.Default
+    private Integer totalOrders = 0;
 
-    // Dates
-    private Instant joinDate; // When seller registered
-    private Instant lastSaleDate; // Most recent order completion
+    @Builder.Default
+    private Integer totalCustomers = 0;
+
+    // --- Best Performing Products ---
+
+    private String bestSellingProductId;
+    private String bestSellingProductName;
+
+    @Builder.Default
+    private Integer bestSellingProductCount = 0;
+
+    // --- Ratings & Reviews ---
+
+    @Builder.Default
+    private Double averageRating = 0.0;
+
+    @Builder.Default
+    private Integer totalReviews = 0;
+
+    @Builder.Default
+    private Integer totalFiveStarReviews = 0;
+
+    @Builder.Default
+    private Integer totalOneStarReviews = 0;
+
+    // --- Shop Info ---
+
+    private String shopDescription;
+    private String shopLogoUrl;
+
+    @Builder.Default
+    private Boolean isVerified = false;
+
+    @Builder.Default
+    private Boolean isActive = true;
+
+    // --- Performance Metrics ---
+
+    @Builder.Default
+    private Double deliveryRating = 0.0;
+
+    @Builder.Default
+    private Double communicationRating = 0.0;
+
+    @Builder.Default
+    private Integer returnRate = 0;
+
+    @Builder.Default
+    private Integer cancellationRate = 0;
+
+    // --- Dates ---
+
+    /** Timestamp of seller registration. */
+    private Instant joinDate;
+
+    /** Timestamp of the most recently fulfilled order. */
+    private Instant lastSaleDate;
+
+    /** Automatically populated by Spring Data MongoDB upon document creation. */
+    @CreatedDate
     private Instant createdAt;
+
+    /**
+     * Automatically updated by Spring Data MongoDB upon any document modification.
+     */
+    @LastModifiedDate
     private Instant updatedAt;
 
-    // Metadata
-    private List<String> categories; // Product categories seller sells
-    private Integer followerCount; // Number of followers
+    // --- Metadata ---
+
+    @Builder.Default
+    private List<String> categories = new ArrayList<>();
+
+    @Builder.Default
+    private Integer followerCount = 0;
 }
