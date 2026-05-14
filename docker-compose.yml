@@ -265,5 +265,11 @@ volumes:
   mongo_data:
     driver: local
   sonarqube_data:
+    external: true
+    name: buy-01_sonarqube_data
   sonarqube_logs:
-  sonarqube_extensions:  
+    external: true
+    name: buy-01_sonarqube_logs
+  sonarqube_extensions:
+    external: true
+    name: buy-01_sonarqube_extensions 
