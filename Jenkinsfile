@@ -8,7 +8,7 @@ pipeline {
 
     triggers {
         githubPush()
-        pollSCM('* * * * *')  // Fixed: Every minute (was H/1 which = every hour)
+       // pollSCM('* * * * *')  // Fixed: Every minute (was H/1 which = every hour)
     }
 
     parameters {
