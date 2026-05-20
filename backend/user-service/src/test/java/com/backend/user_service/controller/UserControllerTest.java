@@ -1,78 +1,104 @@
 package com.backend.user_service.controller;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
-import java.util.Map;
-
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.backend.common.dto.InfoUserDTO;
+import com.backend.common.exception.CustomException;
 import com.backend.user_service.dto.UpdateUserDTO;
 import com.backend.user_service.service.UserService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.web.servlet.MockMvc;
 
-import jakarta.servlet.http.Cookie;
-import jakarta.servlet.http.HttpServletResponse;
-
-@ExtendWith(MockitoExtension.class)
+@WebMvcTest(UserController.class)
+@DisplayName("UserController Web Layer Tests")
 class UserControllerTest {
 
-    @Mock
-    private UserService userService;
-
-    @InjectMocks
-    private UserController userController;
+    @Autowired private MockMvc mockMvc;
+    @MockBean private UserService userService;
+    @Autowired private ObjectMapper objectMapper;
 
     @Test
-    @DisplayName("Get Me should return current user profile")
-    void testGetMe_Success() {
+    @DisplayName("GET /me should return user details when header is present")
+    @WithMockUser(roles = "CLIENT")
+    void getMe_Success() throws Exception {
         InfoUserDTO mockUser = new InfoUserDTO();
         mockUser.setEmail("test@test.com");
-
+        
         when(userService.getUserById("user123")).thenReturn(mockUser);
 
-        ResponseEntity<InfoUserDTO> result = userController.getMe("user123");
-
-        assertEquals(HttpStatus.OK, result.getStatusCode());
-        assertEquals("test@test.com", result.getBody().getEmail());
+        mockMvc.perform(get("/api/users/me")
+                .header("X-User-ID", "user123"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("test@test.com"));
     }
 
     @Test
-    @DisplayName("Update Me should attach new cookie if email changes")
-    void testUpdateMe_WithEmailChange() {
-        UpdateUserDTO updateDto = new UpdateUserDTO();
-        HttpServletResponse response = mock(HttpServletResponse.class);
+    @DisplayName("PUT /me should return 400 when DTO is invalid")
+    @WithMockUser(roles = "CLIENT")
+    void updateMe_InvalidInput() throws Exception {
+        UpdateUserDTO invalidDto = new UpdateUserDTO();
+        invalidDto.setEmail("not-an-email"); // Trigger validation error
 
-        UserService.UserUpdateResult serviceResult = new UserService.UserUpdateResult(true, "new@test.com");
-        when(userService.updateUserInfo("user123", updateDto)).thenReturn(serviceResult);
-
-        Cookie mockCookie = new Cookie("jwt", "new_token");
-        when(userService.generateCookie("new@test.com")).thenReturn(mockCookie);
-
-        ResponseEntity<Map<String, String>> result = userController.updateMe(updateDto, "user123", response);
-
-        assertEquals(HttpStatus.OK, result.getStatusCode());
-        verify(response).addCookie(mockCookie);
+        mockMvc.perform(put("/api/users/me")
+                .header("X-User-ID", "user123")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(invalidDto)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
-    @DisplayName("Delete User should pass raw password to service")
-    void testDeleteUser_Success() {
-        doNothing().when(userService).deleteUser("user123", "myPassword");
+    @DisplayName("DELETE /avatar should be forbidden for unauthenticated")
+    void deleteAvatar_Unauthorized() throws Exception {
+        mockMvc.perform(delete("/api/users/avatar")
+                .header("X-User-ID", "user123"))
+                .andExpect(status().isUnauthorized()); // Security filter catches it
+    }
 
-        ResponseEntity<Map<String, String>> result = userController.deleteUser("user123", "myPassword");
+    @Test
+    @DisplayName("GET /email should be FORBIDDEN for non-ADMIN")
+    @WithMockUser(roles = "CLIENT")
+    void getUsersByEmail_ForbiddenForClient() throws Exception {
+        mockMvc.perform(get("/api/users/email")
+                .param("email", "admin@admin.com"))
+                .andExpect(status().isForbidden());
+    }
 
-        assertEquals(HttpStatus.OK, result.getStatusCode());
-        verify(userService).deleteUser("user123", "myPassword");
+    @Test
+    @DisplayName("GET /email should be allowed for ADMIN")
+    @WithMockUser(roles = "ADMIN")
+    void getUsersByEmail_SuccessForAdmin() throws Exception {
+        InfoUserDTO admin = new InfoUserDTO();
+        admin.setEmail("admin@admin.com");
+        
+        when(userService.getUserByEmail("admin@admin.com")).thenReturn(admin);
+
+        mockMvc.perform(get("/api/users/email")
+                .param("email", "admin@admin.com"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("admin@admin.com"));
+    }
+
+    @Test
+    @DisplayName("DELETE / should handle service-level CustomException")
+    @WithMockUser(roles = "CLIENT")
+    void deleteUser_ServiceFailure() throws Exception {
+        doThrow(new CustomException("Invalid password", HttpStatus.FORBIDDEN))
+                .when(userService).deleteUser(anyString(), anyString());
+
+        mockMvc.perform(delete("/api/users")
+                .header("X-User-ID", "user123")
+                .param("password", "wrong"))
+                .andExpect(status().isForbidden());
     }
 }
