@@ -4,8 +4,10 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * Data Transfer Object representing core user information.
@@ -14,6 +16,8 @@ import lombok.Data;
  */
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @Schema(description = "Core user profile information")
 public class InfoUserDTO {
 

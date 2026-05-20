@@ -14,26 +14,37 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
+import lombok.extern.slf4j.Slf4j;
 import reactor.netty.http.client.HttpClient;
 
+/**
+ * Network configuration for internal microservice-to-microservice
+ * communication.
+ * Provisions load-balanced HTTP clients via Eureka discovery.
+ */
+@Slf4j
 @Configuration
 public class WebClientConfig {
 
+        /**
+         * Constructs a reactive WebClient utilizing a custom, permissive SSL context.
+         * WARNING: This configuration trusts all certificates (including self-signed)
+         * and is strictly designed for local development and internal Docker networks.
+         */
+        @SuppressWarnings("null")
         @Bean
         @LoadBalanced
         public WebClient.Builder webClientBuilder() throws NoSuchAlgorithmException, KeyStoreException, SSLException {
 
-                // ✅ FIX: Create an "insecure" SSL context that trusts all certificates
-                // This is safe for development with self-signed certificates
+                log.warn("INITIALIZING INSECURE WEB CLIENT: SSL Certificate validation is bypassed. " +
+                                "Ensure this configuration is not deployed to external production networks.");
+
                 SslContext sslContext = SslContextBuilder.forClient()
-                                .trustManager(InsecureTrustManagerFactory.INSTANCE) // Trust all certificates
+                                .trustManager(InsecureTrustManagerFactory.INSTANCE)
                                 .build();
 
-                // Create HttpClient with the insecure SSL context
-                HttpClient httpClient = HttpClient.create()
-                                .secure(spec -> spec.sslContext(sslContext));
+                HttpClient httpClient = HttpClient.create().secure(spec -> spec.sslContext(sslContext));
 
-                // Build the WebClient.Builder
                 return WebClient.builder()
                                 .clientConnector(new ReactorClientHttpConnector(httpClient));
         }
@@ -44,7 +55,10 @@ public class WebClientConfig {
                 return new RestTemplate();
         }
 
-        // ✅ ADD THIS: Insecure trust manager for development
+        /**
+         * Internal trust manager implementation that blindly accepts all SSL
+         * certificates.
+         */
         private static class InsecureTrustManagerFactory {
                 public static final io.netty.handler.ssl.util.InsecureTrustManagerFactory INSTANCE = (io.netty.handler.ssl.util.InsecureTrustManagerFactory) io.netty.handler.ssl.util.InsecureTrustManagerFactory.INSTANCE;
         }

@@ -1,114 +1,53 @@
 package com.backend.user_service.controller;
 
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.backend.common.dto.SellerProfileDTO;
 import com.backend.user_service.service.SellerProfileService;
 
-import jakarta.servlet.http.HttpServletRequest;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
-/**
- * Controller for Seller Profile endpoints
- * Note: Sellers are users with seller role, so this controller is in
- * user-service
- */
 @RestController
 @RequestMapping("/api/sellers")
 @RequiredArgsConstructor
+@Tag(name = "Seller Profile API", description = "Endpoints dedicated to managing seller-specific metadata and performance statistics")
 public class SellerProfileController {
 
     private final SellerProfileService sellerProfileService;
-    private static final String USER_ID_HEADER = "X-User-ID";
-    private static final String USER_ROLE_HEADER = "X-User-Role";
 
-    /**
-     * Get authenticated seller's profile
-     * GET /api/sellers/profile
-     */
     @GetMapping("/profile")
-    public ResponseEntity<SellerProfileDTO> getAuthenticatedSellerProfile(HttpServletRequest request) {
-        String userId = request.getHeader(USER_ID_HEADER);
-        String userRole = request.getHeader(USER_ROLE_HEADER);
-
-        if (userId == null || userId.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-
-        // Check if user is a seller
-        if (userRole == null || !userRole.equals("SELLER")) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        }
-
-        try {
-            SellerProfileDTO profile = sellerProfileService.getSellerProfile(userId);
-            return ResponseEntity.ok(profile);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+    @PreAuthorize("hasRole('SELLER')")
+    @Operation(summary = "Get current seller profile", description = "Retrieves the authenticated seller's shop profile based on their Gateway user ID.")
+    public ResponseEntity<SellerProfileDTO> getAuthenticatedSellerProfile(@RequestHeader("X-User-ID") String userId) {
+        SellerProfileDTO profile = sellerProfileService.getSellerProfile(userId);
+        return ResponseEntity.ok(profile);
     }
 
-    /**
-     * Get public seller profile by sellerId
-     * GET /api/sellers/{sellerId}/profile
-     */
-    @GetMapping("/{sellerId}/profile")
-    public ResponseEntity<SellerProfileDTO> getSellerProfile(@PathVariable String sellerId) {
-        try {
-            SellerProfileDTO profile = sellerProfileService.getSellerProfile(sellerId);
-            return ResponseEntity.ok(profile);
-        } catch (Exception e) {
-            return ResponseEntity.notFound().build();
-        }
-    }
-
-    /**
-     * Get seller's statistics
-     * GET /api/sellers/{sellerId}/statistics
-     */
     @GetMapping("/{sellerId}/statistics")
+    @Operation(summary = "Get public seller statistics", description = "Retrieves the public-facing performance statistics of a specific seller.")
     public ResponseEntity<SellerProfileDTO> getSellerStatistics(@PathVariable String sellerId) {
-        try {
-            SellerProfileDTO statistics = sellerProfileService.getSellerStatistics(sellerId);
-            return ResponseEntity.ok(statistics);
-        } catch (Exception e) {
-            return ResponseEntity.notFound().build();
-        }
+        SellerProfileDTO statistics = sellerProfileService.getSellerStatistics(sellerId);
+        return ResponseEntity.ok(statistics);
     }
 
-    /**
-     * Update authenticated seller's profile
-     * PUT /api/sellers/profile
-     */
     @PutMapping("/profile")
+    @PreAuthorize("hasRole('SELLER')")
+    @Operation(summary = "Update seller profile", description = "Allows a seller to update their shop description, logo, and metadata.")
     public ResponseEntity<SellerProfileDTO> updateSellerProfile(
             @RequestBody SellerProfileDTO profileDTO,
-            HttpServletRequest request) {
+            @RequestHeader("X-User-ID") String userId) {
 
-        String userId = request.getHeader(USER_ID_HEADER);
-        String userRole = request.getHeader(USER_ROLE_HEADER);
-
-        if (userId == null || userId.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-
-        // Check if user is a seller
-        if (userRole == null || !userRole.equals("SELLER")) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        }
-
-        try {
-            SellerProfileDTO updated = sellerProfileService.updateProfile(userId, profileDTO);
-            return ResponseEntity.ok(updated);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        SellerProfileDTO updated = sellerProfileService.updateProfile(userId, profileDTO);
+        return ResponseEntity.ok(updated);
     }
 }

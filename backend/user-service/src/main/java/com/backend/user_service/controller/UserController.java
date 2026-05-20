@@ -2,21 +2,12 @@ package com.backend.user_service.controller;
 
 import java.util.Map;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestPart;
-import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.bind.annotation.*;
 
 import com.backend.common.dto.InfoUserDTO;
 import com.backend.user_service.dto.UpdateUserDTO;
@@ -24,77 +15,64 @@ import com.backend.user_service.service.UserService;
 
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.validation.Valid; // Assuming you have validation
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/users")
+@Tag(name = "User Management API", description = "Endpoints for managing core user identities, avatars, and account lifecycles")
 public class UserController {
+
     private final UserService userService;
-    private final AuthenticationManager authenticationManager;
 
     @Autowired
-    public UserController(UserService userService,
-            AuthenticationManager authenticationManager) {
+    public UserController(UserService userService) {
         this.userService = userService;
-        this.authenticationManager = authenticationManager;
-    }
-
-    @PostMapping("/logout")
-    public ResponseEntity<Map<String, String>> handleUserLogout(HttpServletResponse response) {
-        response.addCookie(userService.generateEmptyCookie());
-        return ResponseEntity.ok(Map.of("message", "Logout successful"));
-    }
-
-    @PostMapping("/newAvatar")
-    @PreAuthorize("hasRole('ROLE_SELLER') || hasRole('ROLE_ADMIN')")
-    public ResponseEntity<Map<String, String>> handleUserNewAvatar(
-            @RequestPart(value = "avatarFile", required = true) MultipartFile avatarFile,
-            @RequestHeader("X-User-ID") String userId) {
-        userService.AvatarUpdate(userId, avatarFile);
-        return ResponseEntity.ok(Map.of("message", "Avatar updated successfully"));
     }
 
     @GetMapping("/me")
-    public ResponseEntity<InfoUserDTO> getCurrentUser(@RequestHeader("X-User-ID") String userId) {
-        InfoUserDTO user = userService.getMe(userId);
+    @Operation(summary = "Get current user info", description = "Retrieves the identity details of the currently authenticated user (Client, Seller, or Admin).")
+    public ResponseEntity<InfoUserDTO> getMe(@RequestHeader("X-User-ID") String userId) {
+        InfoUserDTO user = userService.getUserById(userId);
         return ResponseEntity.ok(user);
     }
 
-    @GetMapping("/seller")
-    public ResponseEntity<InfoUserDTO> getUsersByIds(@RequestParam String id) {
-        InfoUserDTO seller = userService.getUserById(id);
-        return ResponseEntity.ok(seller);
-    }
-
     @PutMapping("/me")
+    @Operation(summary = "Update current user", description = "Partially updates user details. May issue a new JWT cookie if the email address was changed.")
     public ResponseEntity<Map<String, String>> updateMe(
             @Valid @RequestBody UpdateUserDTO userUpdatedInfo,
             @RequestHeader("X-User-ID") String userId,
             HttpServletResponse response) {
+        
         UserService.UserUpdateResult result = userService.updateUserInfo(userId, userUpdatedInfo);
+        
         if (result.newJwtNeeded()) {
             Cookie jwtCookie = userService.generateCookie(result.userEmail());
             response.addCookie(jwtCookie);
         }
-        return ResponseEntity.ok(Map.of("message", "updated successfully"));
+        return ResponseEntity.ok(Map.of("message", "Profile updated successfully"));
     }
 
     @DeleteMapping
-    public ResponseEntity<Map<String, String>> deleteUser(@RequestHeader("X-User-ID") String userId,
+    @Operation(summary = "Delete account", description = "Permanently deletes the user's account and publishes a Kafka event to wipe associated data.")
+    public ResponseEntity<Map<String, String>> deleteUser(
+            @RequestHeader("X-User-ID") String userId,
             @RequestParam String password) {
+        
         userService.deleteUser(userId, password);
-        return ResponseEntity.ok(Map.of("message", "user deleted successfully"));
+        return ResponseEntity.ok(Map.of("message", "User account deleted successfully"));
     }
 
     @DeleteMapping("/avatar")
-    @PreAuthorize("hasRole('ROLE_SELLER') || hasRole('ROLE_ADMIN')")
+    @PreAuthorize("hasAnyRole('SELLER', 'ADMIN', 'CLIENT')")
+    @Operation(summary = "Delete user avatar", description = "Removes the user's current avatar and triggers a deletion event in the media-service.")
     public ResponseEntity<String> deleteAvatar(@RequestHeader("X-User-ID") String userId) {
         userService.deleteAvatar(userId);
-        return ResponseEntity.ok("avatar deleted successfully");
+        return ResponseEntity.ok("Avatar deleted successfully");
     }
 
     @GetMapping("/email")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Find user by email (Admin)", description = "Allows administrators to securely look up user profiles via email.")
     public ResponseEntity<InfoUserDTO> getUsersByEmail(@RequestParam String email) {
         InfoUserDTO user = userService.getUserByEmail(email);
         return ResponseEntity.ok(user);
