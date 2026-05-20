@@ -7,7 +7,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.backend.common.dto.InfoUserDTO;
 import com.backend.common.exception.CustomException;
+import com.backend.common.repository.SellerProfileRepository;
 import com.backend.user_service.dto.UpdateUserDTO;
+import com.backend.user_service.repository.UserRepository;
 import com.backend.user_service.service.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -20,7 +22,10 @@ import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
+
 @WebMvcTest(UserController.class)
+// Add this to prevent the full application context from starting
+@MockBean({UserRepository.class, SellerProfileRepository.class})
 @DisplayName("UserController Web Layer Tests")
 class UserControllerTest {
 
