@@ -310,7 +310,7 @@ pipeline {
                                       -v jenkins_m2_cache:/root/.m2 \\
                                       -w ${WORKSPACE}/backend \\
                                       ${MAVEN_IMAGE} \\
-                                      mvn test -B -Dtest=*UnitTest -pl ''' + service + '''
+                                      mvn test -B -Dtest=*Test -pl ''' + service + '''
 
                                     echo "✅ ''' + service + ''' unit tests passed"
                                 fi
