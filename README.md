@@ -1,6 +1,5 @@
 # Buy-01: E-Commerce Microservices Platform
 
-test
 A complete, production-ready e-commerce platform featuring Spring Boot microservices, Angular frontend, Jenkins CI/CD, and SonarQube code quality integration.
 
 ## 📋 Table of Contents
