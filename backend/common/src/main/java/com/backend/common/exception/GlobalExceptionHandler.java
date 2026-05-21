@@ -104,11 +104,6 @@ public class GlobalExceptionHandler {
         throw ex;
     }
 
-    @ExceptionHandler(AuthenticationException.class)
-    public void handleAuthenticationException(AuthenticationException ex) {
-        throw ex;
-    }
-
     // ─────────────────────────────────────────────────────────────────
     // Helper Methods (Frontend JSON Contract)
     // ─────────────────────────────────────────────────────────────────
