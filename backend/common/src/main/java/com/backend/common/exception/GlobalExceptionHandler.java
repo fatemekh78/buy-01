@@ -1,8 +1,12 @@
 package com.backend.common.exception;
 
-import lombok.extern.slf4j.Slf4j;
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.validation.FieldError;
@@ -12,13 +16,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 
-import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Centralized exception interception for all microservices.
- * Formats all backend exceptions into a predictable JSON schema for the Angular frontend.
+ * Formats all backend exceptions into a predictable JSON schema for the Angular
+ * frontend.
  */
 @Slf4j
 @RestControllerAdvice
@@ -44,11 +47,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidation(MethodArgumentNotValidException ex) {
         Map<String, String> validationErrors = new HashMap<>();
-        
+
         for (FieldError fieldError : ex.getBindingResult().getFieldErrors()) {
             validationErrors.put(fieldError.getField(), fieldError.getDefaultMessage());
         }
-        
+
         log.warn("Payload validation failed: {}", validationErrors);
         return buildFieldErrorResponse(HttpStatus.BAD_REQUEST, validationErrors);
     }
@@ -65,7 +68,7 @@ public class GlobalExceptionHandler {
     /**
      * Handles Spring Security authentication failures from Gateway/Services.
      */
-    @ExceptionHandler({AuthenticationException.class, UsernameNotFoundException.class})
+    @ExceptionHandler({ AuthenticationException.class, UsernameNotFoundException.class })
     public ResponseEntity<Map<String, Object>> handleAuthenticationException(RuntimeException ex) {
         log.warn("Authentication failed: {}", ex.getMessage());
         return buildResponse(HttpStatus.UNAUTHORIZED, "Invalid credentials or token.");
@@ -87,6 +90,23 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleGenericException(Exception ex) {
         log.error("CRITICAL: Unhandled internal server error occurred.", ex);
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred on the server.");
+    }
+
+    /**
+     * Prevent the global exception handler from swallowing security exceptions.
+     * Re-throwing them allows Spring Security's ExceptionTranslationFilter to step
+     * in
+     * and correctly route to your CustomAuthEntryPoint (401) or AccessDeniedHandler
+     * (403).
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public void handleAccessDeniedException(AccessDeniedException ex) {
+        throw ex;
+    }
+
+    @ExceptionHandler(AuthenticationException.class)
+    public void handleAuthenticationException(AuthenticationException ex) {
+        throw ex;
     }
 
     // ─────────────────────────────────────────────────────────────────
