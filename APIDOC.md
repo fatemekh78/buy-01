@@ -7,12 +7,15 @@ Our platform utilizes **Springdoc OpenAPI** to provide live, interactive documen
 2. [General Information](#2-general-information)
 3. [Data Transfer Objects (DTOs)](#3-data-transfer-objects-dtos)
 4. [API Endpoints](#4-api-endpoints)
+    - 4.1 Auth API
+    - 4.2 User Management API
+    - 4.3 Seller Profile API
+    - 4.4 Product Management API
 
 ---
 
 ## 1. Development Tracker
 
-### Defined Schemas (Models)
 | Schema Name | Description | Status |
 | :--- | :--- | :--- |
 | `Role` | Enum defining access levels (CLIENT, SELLER, ADMIN). | ✅ Validated |
@@ -21,7 +24,15 @@ Our platform utilizes **Springdoc OpenAPI** to provide live, interactive documen
 | `RegisterUserDTO` | Payload for registering a new account. | ✅ Validated |
 | `LoginUserDTO` | Payload for authentication. | ✅ Validated |
 | `UpdateUserDTO` | Payload for partially updating a user profile. | ✅ Validated |
-| `MediaUploadResponseDTO`| Returns `fileId` and `fileUrl` upon successful upload. | ⏳ Pending |
+| `MediaUploadResponseDTO`| Returns `fileId` and `fileUrl` upon successful upload. | ✅ Validated |
+| `ClientProductDTO` | Standard product mapping for general client usage. | ✅ Validated |
+| `CreateProductDTO` | Payload for initializing a new product listing. | ✅ Validated |
+| `UpdateProductDTO` | Payload for modifying existing product details. | ✅ Validated |
+| `ProductCardDTO` | Lightweight product schema tailored for catalog and home pages. | ✅ Validated |
+| `ProductDTO` | Full product schema including media arrays and seller contact info. | ✅ Validated |
+| `ProductSimpleDTO` | Lean schema specifically for internal service-to-service calls. | ✅ Validated |
+| `StockAdjustmentRequest`| Payload for inventory decrement/increment operations. | ✅ Validated |
+| `SellerOrderDTO` | Order details aggregated and optimized for seller dashboards. | ✅ Validated |
 
 ---
 
@@ -151,6 +162,121 @@ Payload for partially updating a user profile. All fields are optional.
 
 ```
 
+### ClientProductDTO
+
+Standard payload for representing product information to the client.
+
+```json
+{
+  "name": "Mechanical Keyboard",
+  "description": "High-profile mechanical keyboard with RGB.",
+  "price": 129.99,
+  "quantity": 50
+}
+
+```
+
+### CreateProductDTO
+
+Payload for initializing a new product listing.
+
+```json
+{
+  "name": "Mechanical Keyboard",
+  "description": "High-profile mechanical keyboard with RGB.",
+  "price": 129.99,
+  "quantity": 50
+}
+
+```
+
+### ProductCardDTO
+
+Lightweight product schema tailored for catalog and home pages, including a subset of image URLs.
+
+```json
+{
+  "id": "prod_8832",
+  "name": "Mechanical Keyboard",
+  "description": "High-profile mechanical keyboard with RGB.",
+  "price": 129.99,
+  "quantity": 50,
+  "createdByMe": false,
+  "imageUrls": [
+    "[https://storage.example.com/media/img1.png](https://storage.example.com/media/img1.png)",
+    "[https://storage.example.com/media/img2.png](https://storage.example.com/media/img2.png)"
+  ]
+}
+
+```
+
+### ProductDTO
+
+Full product schema including media arrays, ownership flags, and seller contact info.
+
+```json
+{
+  "productId": "prod_8832",
+  "name": "Mechanical Keyboard",
+  "description": "High-profile mechanical keyboard with RGB.",
+  "price": 129.99,
+  "quantity": 50,
+  "sellerFirstName": "Jane",
+  "sellerLastName": "Smith",
+  "sellerEmail": "jane.smith@example.com",
+  "createdByMe": true,
+  "media": [
+    {
+      "fileId": "media_774",
+      "fileUrl": "[https://storage.example.com/media/img1.png](https://storage.example.com/media/img1.png)"
+    }
+  ]
+}
+
+```
+
+### ProductSimpleDTO
+
+Lean schema specifically for internal service-to-service calls, containing essential data without heavy media objects.
+
+```json
+{
+  "productId": "prod_8832",
+  "name": "Mechanical Keyboard",
+  "description": "High-profile mechanical keyboard with RGB.",
+  "price": 129.99,
+  "quantity": 50,
+  "sellerID": "60d5ec49c54f4b238a4d2e9c"
+}
+
+```
+
+### StockAdjustmentRequest
+
+Payload for inventory decrement/increment operations.
+
+```json
+{
+  "productId": "prod_8832",
+  "quantity": 2
+}
+
+```
+
+### UpdateProductDTO
+
+Payload for modifying existing product details. All fields are optional depending on what needs updating.
+
+```json
+{
+  "name": "Mechanical Keyboard Pro",
+  "description": "Updated model with silent switches.",
+  "price": 139.99,
+  "quantity": 45
+}
+
+```
+
 ---
 
 ## 4. API Endpoints
@@ -188,3 +314,32 @@ Endpoints dedicated to managing seller-specific metadata and shop statistics. Ba
 | **GET** | `/profile` | Gets the authenticated seller's shop. | Yes | **SELLER** | None | **[SellerProfileDTO](https://www.google.com/search?q=%23sellerprofiledto)** |
 | **PUT** | `/profile` | Updates the seller's shop data. | Yes | **SELLER** | [SellerProfileDTO](https://www.google.com/search?q=%23sellerprofiledto) | **[SellerProfileDTO](https://www.google.com/search?q=%23sellerprofiledto)** |
 | **GET** | `/{id}/statistics` | Gets public stats for a specific seller. | No | None | None | **[SellerProfileDTO](https://www.google.com/search?q=%23sellerprofiledto)** |
+
+#### 4.4 Product Management API
+
+Endpoints dedicated to managing products, inventory, and product media.
+**Base path:** `/api/products`
+
+| Method | Endpoint | Description | Auth | Role Required | Request Payload | Response Type |
+| --- | --- | --- | --- | --- | --- | --- |
+| **GET** | `/all` | Retrieves a paginated list of all products in the catalog. | Optional | ANY | Query Params (Page, Size) | `Page<ProductCardDTO>` |
+| **GET** | `/search` | Dynamic search & filter endpoint (keyword, price, quantity, date ranges). | Optional | ANY | Query Params (`q`, `minPrice`, `maxPrice`, etc.) | `Page<ProductCardDTO>` |
+| **GET** | `/my-products` | Retrieves a paginated list of products created by the current seller. | Yes | **SELLER / ADMIN** | Query Params (Page, Size) | `Page<ProductCardDTO>` |
+| **POST** | `/` | Creates a new product listing. | Yes | **SELLER / ADMIN** | `CreateProductDTO` | `Product` |
+| **PUT** | `/{productId}` | Updates an existing product's details. | Yes | **SELLER / ADMIN** | `UpdateProductDTO` | `UpdateProductDTO` |
+| **DELETE** | `/{productId}` | Permanently deletes a product and triggers media deletion. | Yes | **SELLER / ADMIN** | None | `String` |
+| **GET** | `/{productId}` | Retrieves detailed product information (Authenticated). | Yes | ANY | None | `ProductDTO` |
+| **GET** | `/public/{productId}` | Retrieves detailed product information without user context. | No | ANY | None | `ProductDTO` |
+| **GET** | `/seller/{email}` | Retrieves all products associated with a specific seller email. | No | ANY | None | `List<ProductDTO>` |
+
+### 4.4.1 Internal & Media Product APIs
+
+These endpoints handle specific internal logic, cross-service interactions, and media proxying.
+
+| Method | Endpoint | Description | Auth | Role Required | Request Payload | Response Type |
+| --- | --- | --- | --- | --- | --- | --- |
+| **POST** | `/create/images` | Uploads a single image for a specific product. | Yes | **SELLER / ADMIN** | `MultipartFile` (`file`) | `Map<String, String>` |
+| **DELETE** | `/deleteMedia/{productId}/{mediaId}` | Removes a specific media asset from a product. | Yes | **SELLER / ADMIN** | None | `Map<String, String>` |
+| **POST** | `/adjust-stock` | Decrements stock during order processing (Internal use). | No | INTERNAL | `List<StockAdjustmentRequest>` | `Void` (200 OK) |
+| **POST** | `/restock` | Increments stock upon order cancellation (Internal use). | No | INTERNAL | `List<StockAdjustmentRequest>` | `Void` (200 OK) |
+| **GET** | `/simple/{productId}` | Extremely lightweight fetch for `orders-service` verification. | No | INTERNAL | None | `ProductSimpleDTO` |

@@ -3,18 +3,17 @@ package com.backend.product_service.service;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.multipart.MultipartFile;
@@ -33,48 +32,32 @@ import com.backend.product_service.dto.UpdateProductDTO;
 import com.backend.product_service.model.Product;
 import com.backend.product_service.repository.ProductRepository;
 
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+
+@Slf4j
 @Service
+@RequiredArgsConstructor
 public class ProductService {
+
     private final ProductRepository productRepository;
     private final WebClient.Builder webClientBuilder;
     private final KafkaTemplate<String, String> kafkaTemplate;
 
-    @Autowired
-    public ProductService(ProductRepository productRepository,
-            WebClient.Builder webClientBuilder, KafkaTemplate<String, String> kafkaTemplate) {
-        this.productRepository = productRepository;
-        this.webClientBuilder = webClientBuilder;
-        this.kafkaTemplate = kafkaTemplate;
-    }
-
-    public ProductDTO getProductByProductID(String productID) {
-        Product product = productRepository.findById(productID)
-                .orElseThrow(() -> new CustomException("Product not found", HttpStatus.NOT_FOUND));
-        if (product == null) {
-            return null;
-        }
-        InfoUserDTO seller = getSellersInfo(product.getSellerID());
-        return new ProductDTO(product, seller, getMedia(productID));
-    }
-
     public Product getProduct(String productID) {
-        System.out.println("Get product by productID: " + productID);
+        log.info("Fetching product by productID: {}", productID);
         return productRepository.findById(productID)
                 .orElseThrow(() -> new CustomException("Product not found", HttpStatus.NOT_FOUND));
     }
 
     /**
      * Get product DTO with minimal details (just product info from database)
-     * Used for internal service-to-service calls that only need basic product data
-     * No external calls - returns data directly from database
+     * Used for internal service-to-service calls.
      */
     public ProductSimpleDTO getProductDTOOnly(String productId) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new CustomException("Product not found", HttpStatus.NOT_FOUND));
-        if (product == null) {
-            return null;
-        }
-        // Return simple DTO with just product data including sellerID
+        Product product = getProduct(productId);
         return new ProductSimpleDTO(product);
     }
 
@@ -82,21 +65,19 @@ public class ProductService {
         return productRepository.findAll();
     }
 
+    @Transactional
     public UpdateProductDTO updateProduct(String productId, String sellerId, UpdateProductDTO productDto) {
         Product existingProduct = checkProduct(productId, sellerId);
-        // Manual mapping to avoid MapStruct bean dependency
-        if (productDto.getName() != null) {
+
+        if (productDto.getName() != null)
             existingProduct.setName(productDto.getName());
-        }
-        if (productDto.getDescription() != null) {
+        if (productDto.getDescription() != null)
             existingProduct.setDescription(productDto.getDescription());
-        }
-        if (productDto.getPrice() != null) {
+        if (productDto.getPrice() != null)
             existingProduct.setPrice(productDto.getPrice());
-        }
-        if (productDto.getQuantity() != null) {
+        if (productDto.getQuantity() != null)
             existingProduct.setQuantity(productDto.getQuantity());
-        }
+
         Product savedProduct = productRepository.save(existingProduct);
         return UpdateProductDTO.builder()
                 .name(savedProduct.getName())
@@ -106,17 +87,19 @@ public class ProductService {
                 .build();
     }
 
+    @Transactional
     public void DeleteProductsOfUser(String sellerId) {
         List<Product> products = productRepository.findAllBySellerID(sellerId);
-        if (products.isEmpty()) {
+        if (products.isEmpty())
             return;
-        }
+
         for (Product product : products) {
             kafkaTemplate.send("product-deleted-topic", product.getId());
-            productRepository.delete(product);
         }
+        productRepository.deleteAll(products);
     }
 
+    @Transactional
     public void deleteProduct(String productId, String sellerId) {
         Product existingProduct = checkProduct(productId, sellerId);
         kafkaTemplate.send("product-deleted-topic", productId);
@@ -124,22 +107,17 @@ public class ProductService {
     }
 
     public void deleteProductMedia(String productId, String sellerId, String mediaId) {
-        Product existingProduct = checkProduct(productId, sellerId);
+        checkProduct(productId, sellerId);
         deleteMedia(mediaId);
     }
 
     public ProductDTO getProductWithDetail(String productId, String userId) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new CustomException("Product not found", HttpStatus.NOT_FOUND));
-        if (product == null) {
-            return null;
-        }
-
+        Product product = getProduct(productId);
         InfoUserDTO seller = getSellersInfo(product.getSellerID());
-
         List<MediaUploadResponseDTO> media = getMedia(product.getId());
+
         ProductDTO productDTO = new ProductDTO(product, seller, media);
-        productDTO.setCreatedByMe(product.getSellerID().equals(userId));
+        productDTO.setCreatedByMe(userId != null && product.getSellerID().equals(userId));
         return productDTO;
     }
 
@@ -148,141 +126,103 @@ public class ProductService {
         if (seller == null) {
             throw new CustomException("Seller not found", HttpStatus.NOT_FOUND);
         }
-        List<Product> products = productRepository.findAllBySellerID(seller.getId());
-        if (products.isEmpty()) {
-            return Collections.emptyList();
-        }
-        List<ProductDTO> result;
-        result = appendSellersToProduct(products, Collections.singletonList(seller));
-        for (ProductDTO productDTO : result) {
-            productDTO.setMedia(getMedia(productDTO.getProductId()));
 
-        }
-        return result;
+        List<Product> products = productRepository.findAllBySellerID(seller.getId());
+        if (products.isEmpty())
+            return Collections.emptyList();
+
+        // FIX: Replaced sequential loop with Concurrent Reactive fetching
+        return Flux.fromIterable(products)
+                .flatMapSequential(product -> getMediaReactive(product.getId())
+                        .map(media -> {
+                            ProductDTO dto = new ProductDTO(product, seller, media);
+                            dto.setCreatedByMe(false);
+                            return dto;
+                        }))
+                .collectList()
+                .block();
     }
 
-    // --- New Method 1: Get ALL products (for Home page) ---
     public Page<ProductCardDTO> getAllProducts(Pageable pageable, String sellerId) {
         Page<Product> productPage = productRepository.findAll(pageable);
         return convertToCardDTOPage(productPage, sellerId);
     }
 
-    // --- New Method 2: Get products for a specific seller (for My Products page)
-    // ---
     public Page<ProductCardDTO> getMyProducts(Pageable pageable, String sellerId) {
         Page<Product> productPage = productRepository.findBySellerID(sellerId, pageable);
         return convertToCardDTOPage(productPage, sellerId);
     }
 
-    private Page<ProductCardDTO> convertToCardDTOPage(Page<Product> productPage, String sellerId) {
-        return productPage.map(product -> {
-
-            boolean isCreator = (product.getSellerID().equals(sellerId));
-
-            List<String> limitedImages = getLimitedImageUrls(product.getId(), 3);
-
-            return new ProductCardDTO(
-                    product.getId(),
-                    product.getName(),
-                    product.getDescription(),
-                    product.getPrice(),
-                    product.getQuantity(),
-                    isCreator,
-                    limitedImages);
-        });
-    }
-
     /**
-     * New private helper to fetch limited image URLs from Media Service
+     * FIX: Concurrent network fetching for limited images to prevent N+1 lag.
      */
-    private List<String> getLimitedImageUrls(String productId, int limit) {
-        try {
-            // This is the correct type for deserializing a generic list
-            ParameterizedTypeReference<List<String>> listType = new ParameterizedTypeReference<>() {
-            };
+    private Page<ProductCardDTO> convertToCardDTOPage(Page<Product> productPage, String sellerId) {
+        if (productPage.isEmpty())
+            return Page.empty(productPage.getPageable());
 
-            return webClientBuilder.build().get()
-                    .uri(uriBuilder -> uriBuilder
-                            .scheme("https")
-                            .host("MEDIA-SERVICE")
-                            .path("/api/media/product/{productId}/urls")
-                            .queryParam("limit", limit)
-                            .build(productId))
-                    .retrieve()
-                    // ✅ THE FIX: Deserialize directly into a List<String>
-                    .bodyToMono(listType)
-                    .block(); // .block() is acceptable here
-        } catch (Exception e) {
-            System.err.println("Failed to fetch media URLs for product " + productId + ": " + e.getMessage());
-            return List.of();
-        }
-    }
+        List<ProductCardDTO> dtoList = Flux.fromIterable(productPage.getContent())
+                .flatMapSequential(product -> {
+                    boolean isCreator = sellerId != null && product.getSellerID().equals(sellerId);
+                    return getLimitedImageUrlsReactive(product.getId(), 3)
+                            .map(images -> new ProductCardDTO(
+                                    product.getId(),
+                                    product.getName(),
+                                    product.getDescription(),
+                                    product.getPrice(),
+                                    product.getQuantity(),
+                                    isCreator,
+                                    images));
+                })
+                .collectList()
+                .block();
 
-    private List<ProductDTO> appendSellersToProduct(List<Product> products, List<InfoUserDTO> sellers) {
-        assert sellers != null;
-        Map<String, InfoUserDTO> sellerMap = sellers.stream()
-                .collect(Collectors.toMap(InfoUserDTO::getId, user -> user));
-
-        return products.stream().map(product -> {
-            InfoUserDTO seller = sellerMap.get(product.getSellerID());
-            return new ProductDTO(product, seller, null);
-        }).collect(Collectors.toList());
+        return new PageImpl<>(dtoList, productPage.getPageable(), productPage.getTotalElements());
     }
 
     public Product createProduct(String sellerId, CreateProductDTO productDto) {
-        Product product = productDto.toProduct();
         if (checkId(sellerId)) {
             throw new CustomException("Seller ID is null", HttpStatus.UNAUTHORIZED);
         }
-        product.setSellerID(sellerId);
 
-        // Save and return the product so we can get its ID
+        Product product = productDto.toProduct();
+        product.setSellerID(sellerId);
         return productRepository.save(product);
     }
 
+    @Transactional // FIX: Ensure atomic database writes
     public void adjustProductStock(List<StockAdjustmentRequest> adjustments) {
-        if (adjustments == null || adjustments.isEmpty()) {
+        if (adjustments == null || adjustments.isEmpty())
             return;
-        }
 
         for (StockAdjustmentRequest adjustment : adjustments) {
-            Product product = productRepository.findById(adjustment.getProductId())
-                    .orElseThrow(() -> new CustomException("Product not found", HttpStatus.NOT_FOUND));
-
+            Product product = getProduct(adjustment.getProductId());
             if (product.getQuantity() < adjustment.getQuantity()) {
                 throw new CustomException(
                         String.format("Product '%s' is out of stock. Available: %d, Requested: %d",
                                 product.getName(), product.getQuantity(), adjustment.getQuantity()),
                         HttpStatus.BAD_REQUEST);
             }
-
             product.setQuantity(product.getQuantity() - adjustment.getQuantity());
             productRepository.save(product);
         }
     }
 
+    @Transactional // FIX: Ensure atomic database writes
     public void restockProducts(List<StockAdjustmentRequest> adjustments) {
-        if (adjustments == null || adjustments.isEmpty()) {
+        if (adjustments == null || adjustments.isEmpty())
             return;
-        }
 
         for (StockAdjustmentRequest adjustment : adjustments) {
-            Product product = productRepository.findById(adjustment.getProductId())
-                    .orElseThrow(() -> new CustomException("Product not found", HttpStatus.NOT_FOUND));
-
+            Product product = getProduct(adjustment.getProductId());
             product.setQuantity(product.getQuantity() + adjustment.getQuantity());
             productRepository.save(product);
         }
     }
 
     public void createImage(MultipartFile file, String productId, String sellerId, String role) {
-        if (file == null || file.isEmpty()) {
+        if (file == null || file.isEmpty())
             return;
-        }
-        // Check that the seller owns this product
-        Product product = checkProduct(productId, sellerId);
-        // Save the single image
-
+        checkProduct(productId, sellerId);
         saveProductImage(file, productId, role);
     }
 
@@ -290,7 +230,6 @@ public class ProductService {
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
 
         try {
-            // ✅ Use ByteArrayResource, which is more reliable
             ByteArrayResource fileResource = new ByteArrayResource(image.getBytes()) {
                 @Override
                 public String getFilename() {
@@ -298,15 +237,14 @@ public class ProductService {
                 }
             };
             body.add("file", fileResource);
-            body.add("productId", productId); // Send productId as a part
+            body.add("productId", productId);
 
         } catch (IOException e) {
-            System.out.println(e.getMessage());
+            log.error("Failed to read image file: {}", e.getMessage());
             throw new CustomException("Failed to read image file", HttpStatus.INTERNAL_SERVER_ERROR);
         }
 
         MediaUploadResponseDTO mediaResponse = webClientBuilder.build().post()
-                // ✅ Make sure this URL is correct for your media-service
                 .uri("https://MEDIA-SERVICE/api/media/upload")
                 .contentType(MediaType.MULTIPART_FORM_DATA)
                 .header("X-User-Role", role)
@@ -321,11 +259,15 @@ public class ProductService {
         return mediaResponse.getFileUrl();
     }
 
+    // --------------------------------------------------------
+    // Helper Methods & WebClient Calls
+    // --------------------------------------------------------
+
     private InfoUserDTO getSellersInfo(String sellerId) {
         return webClientBuilder.build().get()
-                .uri("https://USER-SERVICE/api/users/seller?id={sellerId}", sellerId) // Use URI variable
+                .uri("https://USER-SERVICE/api/users/seller?id={sellerId}", sellerId)
                 .retrieve()
-                .bodyToMono(InfoUserDTO.class) // ✅ FIX: Expect a single object
+                .bodyToMono(InfoUserDTO.class)
                 .block();
     }
 
@@ -338,16 +280,41 @@ public class ProductService {
     }
 
     private List<MediaUploadResponseDTO> getMedia(String productId) {
+        return getMediaReactive(productId).block();
+    }
+
+    private Mono<List<MediaUploadResponseDTO>> getMediaReactive(String productId) {
         return webClientBuilder.build().get()
                 .uri("https://MEDIA-SERVICE/api/media/batch?productID={productId}", productId)
                 .retrieve()
                 .bodyToFlux(MediaUploadResponseDTO.class)
                 .collectList()
-                .block();
+                .onErrorResume(e -> {
+                    log.error("Failed to fetch media batch for product {}: {}", productId, e.getMessage());
+                    return Mono.just(Collections.emptyList());
+                });
+    }
+
+    private Mono<List<String>> getLimitedImageUrlsReactive(String productId, int limit) {
+        ParameterizedTypeReference<List<String>> listType = new ParameterizedTypeReference<>() {
+        };
+        return webClientBuilder.build().get()
+                .uri(uriBuilder -> uriBuilder
+                        .scheme("https")
+                        .host("MEDIA-SERVICE")
+                        .path("/api/media/product/{productId}/urls")
+                        .queryParam("limit", limit)
+                        .build(productId))
+                .retrieve()
+                .bodyToMono(listType)
+                .onErrorResume(e -> {
+                    log.error("Failed to fetch media URLs for product {}: {}", productId, e.getMessage());
+                    return Mono.just(List.of());
+                });
     }
 
     private String deleteMedia(String mediaId) {
-        System.out.println("sending the delete request");
+        log.info("Sending delete request for media: {}", mediaId);
         return webClientBuilder.build().delete()
                 .uri("https://MEDIA-SERVICE/api/media/{mediaId}", mediaId)
                 .retrieve()
@@ -360,11 +327,12 @@ public class ProductService {
     }
 
     private Product checkProduct(String productId, String sellerId) {
+        // FIX: The error messages here were originally swapped. They are now correct.
         if (checkId(productId)) {
-            throw new CustomException("Seller ID is null", HttpStatus.UNAUTHORIZED);
+            throw new CustomException("Product ID is null", HttpStatus.BAD_REQUEST);
         }
         if (checkId(sellerId)) {
-            throw new CustomException("product id is null", HttpStatus.BAD_REQUEST);
+            throw new CustomException("Seller ID is null", HttpStatus.UNAUTHORIZED);
         }
         Product existingProduct = getProduct(productId);
         if (!existingProduct.getSellerID().equals(sellerId)) {
@@ -372,5 +340,4 @@ public class ProductService {
         }
         return existingProduct;
     }
-
 }

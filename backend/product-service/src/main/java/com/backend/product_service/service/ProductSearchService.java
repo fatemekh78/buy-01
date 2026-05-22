@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -16,6 +17,8 @@ import com.backend.product_service.repository.ProductRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 /**
  * Service for product search and filtering
@@ -32,18 +35,6 @@ public class ProductSearchService {
     /**
      * Search and filter products with optional criteria
      * If all parameters are null, returns all products
-     * 
-     * @param keyword     - Search keyword (matches product name or description)
-     * @param minPrice    - Minimum price filter (optional)
-     * @param maxPrice    - Maximum price filter (optional)
-     * @param minQuantity - Minimum quantity filter (optional)
-     * @param maxQuantity - Maximum quantity filter (optional)
-     * @param startDate   - Filter products created after this date (optional)
-     * @param endDate     - Filter products created before this date (optional)
-     * @param sellerId    - Current user ID to check if they created the product
-     *                    (optional)
-     * @param pageable    - Pagination info
-     * @return Page of ProductCardDTO matching the criteria
      */
     public Page<ProductCardDTO> searchAndFilter(
             String keyword,
@@ -77,55 +68,61 @@ public class ProductSearchService {
 
         log.info("Found {} products matching criteria", products.getTotalElements());
 
-        // Convert Product entities to ProductCardDTO with limited images
+        // Convert Product entities to ProductCardDTO using concurrent network calls
         return convertToCardDTOPage(products, sellerId);
     }
 
     /**
-     * Convert Product page to ProductCardDTO page with limited images
-     * Same pattern as ProductService.getAllProducts()
+     * Convert Product page to ProductCardDTO page with limited images.
+     * Uses Flux.flatMapSequential to fetch images concurrently while preserving sort order.
      */
     private Page<ProductCardDTO> convertToCardDTOPage(Page<Product> productPage, String sellerId) {
-        return productPage.map(product -> {
-            boolean isCreator = sellerId != null && product.getSellerID().equals(sellerId);
-            List<String> limitedImages = getLimitedImageUrls(product.getId(), 3);
+        if (productPage.isEmpty()) {
+            return Page.empty(productPage.getPageable());
+        }
 
-            return new ProductCardDTO(
-                    product.getId(),
-                    product.getName(),
-                    product.getDescription(),
-                    product.getPrice(),
-                    product.getQuantity(),
-                    isCreator,
-                    limitedImages);
-        });
+        List<ProductCardDTO> dtoList = Flux.fromIterable(productPage.getContent())
+                .flatMapSequential(product -> {
+                    boolean isCreator = sellerId != null && product.getSellerID().equals(sellerId);
+                    
+                    // Return a Mono that combines the product info with the asynchronously fetched images
+                    return getLimitedImageUrlsReactive(product.getId(), 3)
+                            .map(images -> new ProductCardDTO(
+                                    product.getId(),
+                                    product.getName(),
+                                    product.getDescription(),
+                                    product.getPrice(),
+                                    product.getQuantity(),
+                                    isCreator,
+                                    images
+                            ));
+                })
+                .collectList()
+                .block(); // Block exactly once for the entire batch of concurrent calls
+
+        return new PageImpl<>(dtoList, productPage.getPageable(), productPage.getTotalElements());
     }
 
     /**
-     * Fetch limited image URLs from Media Service
-     * Same pattern as ProductService.getLimitedImageUrls()
+     * Fetch limited image URLs from Media Service reactively
+     * Returns a Mono<List<String>> instead of blocking immediately
      */
-    private List<String> getLimitedImageUrls(String productId, int limit) {
-        try {
-            ParameterizedTypeReference<List<String>> listType = new ParameterizedTypeReference<>() {
-            };
+    private Mono<List<String>> getLimitedImageUrlsReactive(String productId, int limit) {
+        ParameterizedTypeReference<List<String>> listType = new ParameterizedTypeReference<>() {};
 
-            List<String> result = webClientBuilder.build().get()
-                    .uri(uriBuilder -> uriBuilder
-                            .scheme("https")
-                            .host("MEDIA-SERVICE")
-                            .path("/api/media/product/{productId}/urls")
-                            .queryParam("limit", limit)
-                            .build(productId))
-                    .retrieve()
-                    .bodyToMono(listType)
-                    .block();
-
-            // Ensure we never return null
-            return result != null ? result : List.of();
-        } catch (Exception e) {
-            log.error("Failed to fetch media URLs for product {}: {}", productId, e.getMessage());
-            return List.of();
-        }
+        return webClientBuilder.build().get()
+                .uri(uriBuilder -> uriBuilder
+                        .scheme("https")
+                        .host("MEDIA-SERVICE")
+                        .path("/api/media/product/{productId}/urls")
+                        .queryParam("limit", limit)
+                        .build(productId))
+                .retrieve()
+                .bodyToMono(listType)
+                .onErrorResume(e -> {
+                    // Fallback mechanism: if media service fails, log and return empty list
+                    log.error("Failed to fetch media URLs for product {}: {}", productId, e.getMessage());
+                    return Mono.just(List.of());
+                });
     }
 }

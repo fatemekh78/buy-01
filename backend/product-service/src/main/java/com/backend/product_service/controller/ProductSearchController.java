@@ -9,6 +9,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -16,9 +17,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.backend.common.exception.CustomException;
 import com.backend.product_service.dto.ProductCardDTO;
 import com.backend.product_service.service.ProductSearchService;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -30,94 +35,73 @@ import lombok.extern.slf4j.Slf4j;
 @RequestMapping("/api/products")
 @RequiredArgsConstructor
 @Slf4j
+@Tag(name = "Product Search API", description = "Advanced endpoints for querying, searching, and filtering the product catalog")
 public class ProductSearchController {
 
     private final ProductSearchService productSearchService;
 
-    /**
-     * Search and filter products with optional criteria
-     * If no parameters are provided, returns all products
-     * 
-     * Query parameters (all optional):
-     * - q: Keyword search (searches in name and description)
-     * - minPrice: Minimum price
-     * - maxPrice: Maximum price
-     * - minQuantity: Minimum quantity available
-     * - maxQuantity: Maximum quantity available
-     * - startDate: Filter products created after this date (ISO 8601 format)
-     * - endDate: Filter products created before this date (ISO 8601 format)
-     * - page: Page number (0-indexed, default 0)
-     * - size: Page size (default 20)
-     * - sort: Sort criteria (e.g., createdAt,desc or price,asc)
-     * 
-     * Examples:
-     * - GET /api/products/search - Returns all products
-     * - GET /api/products/search?q=laptop - Search by keyword
-     * - GET /api/products/search?minPrice=500&maxPrice=1500 - Price filter
-     * - GET /api/products/search?q=laptop&minPrice=500&maxPrice=1500 - Combined
-     */
     @GetMapping("/search")
+    @Operation(
+        summary = "Search and filter products", 
+        description = "Performs a dynamic search against the product catalog. All parameters are optional. If no parameters are provided, it returns all products paginated."
+    )
     public ResponseEntity<Page<ProductCardDTO>> searchProducts(
+            @Parameter(description = "Keyword search (matches against name and description)") 
             @RequestParam(name = "q", required = false) String keyword,
+            
+            @Parameter(description = "Minimum price bound") 
             @RequestParam(required = false) BigDecimal minPrice,
+            
+            @Parameter(description = "Maximum price bound") 
             @RequestParam(required = false) BigDecimal maxPrice,
+            
+            @Parameter(description = "Minimum inventory quantity bound") 
             @RequestParam(required = false) Integer minQuantity,
+            
+            @Parameter(description = "Maximum inventory quantity bound") 
             @RequestParam(required = false) Integer maxQuantity,
+            
+            @Parameter(description = "Filter products created after this date (ISO 8601 or yyyy-MM-dd)") 
             @RequestParam(required = false) String startDate,
+            
+            @Parameter(description = "Filter products created before this date (ISO 8601 or yyyy-MM-dd)") 
             @RequestParam(required = false) String endDate,
+            
+            @Parameter(description = "Optional seller ID to flag products owned by the requester") 
             @RequestHeader(value = "X-User-ID", required = false) String sellerId,
+            
             @PageableDefault(size = 20, page = 0, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
 
         log.info("Search request - keyword: {}, minPrice: {}, maxPrice: {}, minQty: {}, maxQty: {}",
                 keyword, minPrice, maxPrice, minQuantity, maxQuantity);
 
-        // Basic validation for non-negative values and ordering
-        if ((minPrice != null && minPrice.signum() < 0)
-                || (maxPrice != null && maxPrice.signum() < 0)) {
-            log.warn("Rejecting search: negative price bounds");
-            return ResponseEntity.badRequest().body(Page.empty(pageable));
+        // Standardized Error Handling mapping to GlobalExceptionHandler
+        if ((minPrice != null && minPrice.signum() < 0) || (maxPrice != null && maxPrice.signum() < 0)) {
+            throw new CustomException("Price bounds cannot be negative", HttpStatus.BAD_REQUEST);
         }
-        if ((minQuantity != null && minQuantity < 0)
-                || (maxQuantity != null && maxQuantity < 0)) {
-            log.warn("Rejecting search: negative quantity bounds");
-            return ResponseEntity.badRequest().body(Page.empty(pageable));
+        
+        if ((minQuantity != null && minQuantity < 0) || (maxQuantity != null && maxQuantity < 0)) {
+            throw new CustomException("Quantity bounds cannot be negative", HttpStatus.BAD_REQUEST);
         }
+        
         if (minPrice != null && maxPrice != null && minPrice.compareTo(maxPrice) > 0) {
-            log.warn("Rejecting search: minPrice > maxPrice");
-            return ResponseEntity.badRequest().body(Page.empty(pageable));
+            throw new CustomException("Minimum price cannot be greater than maximum price", HttpStatus.BAD_REQUEST);
         }
+        
         if (minQuantity != null && maxQuantity != null && minQuantity > maxQuantity) {
-            log.warn("Rejecting search: minQuantity > maxQuantity");
-            return ResponseEntity.badRequest().body(Page.empty(pageable));
+            throw new CustomException("Minimum quantity cannot be greater than maximum quantity", HttpStatus.BAD_REQUEST);
         }
 
-        // Parse dates if provided (support both full ISO and plain yyyy-MM-dd from HTML
-        // date inputs)
-        Instant parsedStartDate;
-        Instant parsedEndDate;
-        try {
-            parsedStartDate = parseDate(startDate);
-            parsedEndDate = parseDate(endDate);
-        } catch (IllegalArgumentException ex) {
-            log.warn("Rejecting search: invalid date format start={} end={}", startDate, endDate);
-            return ResponseEntity.badRequest().body(Page.empty(pageable));
-        }
+        Instant parsedStartDate = parseDate(startDate);
+        Instant parsedEndDate = parseDate(endDate);
 
         if (parsedStartDate != null && parsedEndDate != null && parsedStartDate.isAfter(parsedEndDate)) {
-            log.warn("Rejecting search: startDate after endDate");
-            return ResponseEntity.badRequest().body(Page.empty(pageable));
+            throw new CustomException("Start date cannot be after end date", HttpStatus.BAD_REQUEST);
         }
 
         Page<ProductCardDTO> results = productSearchService.searchAndFilter(
-                keyword,
-                minPrice,
-                maxPrice,
-                minQuantity,
-                maxQuantity,
-                parsedStartDate,
-                parsedEndDate,
-                sellerId,
-                pageable);
+                keyword, minPrice, maxPrice, minQuantity, maxQuantity,
+                parsedStartDate, parsedEndDate, sellerId, pageable);
 
         log.info("Search returned {} results on page {}", results.getNumberOfElements(), pageable.getPageNumber());
         return ResponseEntity.ok(results);
@@ -140,7 +124,8 @@ public class ProductSearchController {
             LocalDate localDate = LocalDate.parse(date);
             return localDate.atStartOfDay().toInstant(ZoneOffset.UTC);
         } catch (Exception ex) {
-            throw new IllegalArgumentException("Invalid date format: " + date);
+            // Throw CustomException so the frontend gets a clean 400 Bad Request JSON response
+            throw new CustomException("Invalid date format: " + date + ". Expected ISO-8601 or yyyy-MM-dd", HttpStatus.BAD_REQUEST);
         }
     }
 }

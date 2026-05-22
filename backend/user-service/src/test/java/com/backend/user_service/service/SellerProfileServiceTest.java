@@ -6,7 +6,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -38,9 +41,12 @@ import com.backend.user_service.repository.UserRepository;
 @DisplayName("SellerProfileService Unit Tests")
 class SellerProfileServiceTest {
 
-    @Mock private SellerProfileRepository sellerProfileRepository;
-    @Mock private UserRepository userRepository;
-    @Mock private RestTemplate restTemplate;
+    @Mock
+    private SellerProfileRepository sellerProfileRepository;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private RestTemplate restTemplate;
 
     @InjectMocks
     private SellerProfileService sellerProfileService;
@@ -86,7 +92,7 @@ class SellerProfileServiceTest {
     void getSellerProfile_NewProfile_UserExists() {
         when(sellerProfileRepository.findBySellerId("seller123")).thenReturn(Optional.empty());
         when(userRepository.findById("seller123")).thenReturn(Optional.of(mockUser));
-        
+
         // Mock the save to return whatever is passed into it
         when(sellerProfileRepository.save(any(SellerProfile.class))).thenAnswer(i -> i.getArguments()[0]);
 
@@ -101,7 +107,7 @@ class SellerProfileServiceTest {
     void getSellerProfile_NewProfile_UserNotFound() {
         when(sellerProfileRepository.findBySellerId("seller123")).thenReturn(Optional.empty());
         when(userRepository.findById("seller123")).thenReturn(Optional.empty());
-        
+
         when(sellerProfileRepository.save(any(SellerProfile.class))).thenAnswer(i -> i.getArguments()[0]);
 
         SellerProfileDTO result = sellerProfileService.getSellerProfile("seller123");
@@ -131,17 +137,15 @@ class SellerProfileServiceTest {
 
         // Mock the RestTemplate exchange
         Map<String, Object> liveStats = Map.of(
-            "totalSales", 50,
-            "totalRevenue", 2500.75
-        );
+                "totalSales", 50,
+                "totalRevenue", 2500.75);
         ResponseEntity<Map<String, Object>> mockResponse = new ResponseEntity<>(liveStats, HttpStatus.OK);
-        
+
         when(restTemplate.exchange(
                 anyString(),
                 eq(HttpMethod.GET),
                 isNull(),
-                any(ParameterizedTypeReference.class)
-        )).thenReturn(mockResponse);
+                any(ParameterizedTypeReference.class))).thenReturn(mockResponse);
 
         SellerProfileDTO result = sellerProfileService.getSellerStatistics("seller123");
 
@@ -193,8 +197,9 @@ class SellerProfileServiceTest {
     void updateProfile_NewProfile() {
         when(sellerProfileRepository.findBySellerId("seller123")).thenReturn(Optional.empty());
         when(userRepository.findById("seller123")).thenReturn(Optional.of(mockUser));
-        
-        // This simulates the save inside createDefaultProfile AND the save inside updateProfile
+
+        // This simulates the save inside createDefaultProfile AND the save inside
+        // updateProfile
         when(sellerProfileRepository.save(any(SellerProfile.class))).thenAnswer(i -> i.getArguments()[0]);
 
         SellerProfileDTO updateRequest = SellerProfileDTO.builder()
@@ -206,5 +211,65 @@ class SellerProfileServiceTest {
         assertThat(result.getSellerName()).isEqualTo("My Brand New Store");
         // Verify save was called twice (once for init, once for update)
         verify(sellerProfileRepository, times(2)).save(any(SellerProfile.class));
+    }
+
+    // @Test
+    // @DisplayName("Should successfully fetch and update seller statistics from orders-service")
+    // void getSellerStatistics_Success() {
+    //     // Arrange
+    //     // FIX: Use a REAL object instead of 'mockProfile' so setters actually save the
+    //     // data in memory
+    //     SellerProfile realProfile = SellerProfile.builder()
+    //             .sellerId("seller123")
+    //             .totalSales(0)
+    //             .totalOrders(0)
+    //             .build();
+
+    //     when(sellerProfileRepository.findBySellerId("seller123")).thenReturn(Optional.of(realProfile));
+
+    //     // Mock the response data coming from the external orders-service
+    //     Map<String, Object> mockStats = Map.of(
+    //             "revenue", "1500.50", // change to whatever your service expects
+    //             "sales", 50, // change to whatever your service expects
+    //             "orders", 45 // change to whatever your service expects
+    //     );
+    //     ResponseEntity<Map<String, Object>> mockResponse = new ResponseEntity<>(mockStats, HttpStatus.OK);
+
+    //     when(restTemplate.exchange(
+    //             anyString(),
+    //             eq(HttpMethod.GET),
+    //             isNull(),
+    //             any(ParameterizedTypeReference.class))).thenReturn(mockResponse);
+
+    //     // Act
+    //     SellerProfileDTO result = sellerProfileService.getSellerStatistics("seller123");
+
+    //     // Assert
+    //     assertThat(result.getSellerId()).isEqualTo("seller123");
+    //     assertThat(result.getTotalSales()).isEqualTo(50);
+    //     assertThat(result.getTotalOrders()).isEqualTo(45);
+    // }
+
+    @Test
+    @DisplayName("Should handle OK response from orders-service with empty body")
+    void getSellerStatistics_EmptyBody() {
+        // Arrange
+        when(sellerProfileRepository.findBySellerId("seller123")).thenReturn(Optional.of(mockProfile));
+
+        // Return 200 OK but with a null body (happens if external service has no data)
+        ResponseEntity<Map<String, Object>> mockResponse = new ResponseEntity<>(null, HttpStatus.OK);
+
+        when(restTemplate.exchange(
+                anyString(),
+                eq(HttpMethod.GET),
+                isNull(),
+                any(ParameterizedTypeReference.class))).thenReturn(mockResponse);
+
+        // Act
+        SellerProfileDTO result = sellerProfileService.getSellerStatistics("seller123");
+
+        // Assert
+        assertThat(result.getSellerId()).isEqualTo("seller123");
+        verify(sellerProfileRepository, never()).save(any(SellerProfile.class));
     }
 }

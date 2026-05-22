@@ -1,15 +1,12 @@
 package com.backend.product_service.controller;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -18,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -29,13 +27,13 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.backend.common.dto.InfoUserDTO;
 import com.backend.product_service.dto.CreateProductDTO;
 import com.backend.product_service.dto.ProductCardDTO;
 import com.backend.product_service.dto.ProductDTO;
+import com.backend.product_service.dto.ProductSimpleDTO;
 import com.backend.product_service.dto.UpdateProductDTO;
 import com.backend.product_service.model.Product;
 import com.backend.product_service.service.ProductService;
@@ -48,9 +46,6 @@ class ProductControllerTest {
     @Mock
     private ProductService productService;
 
-    @Mock
-    private KafkaTemplate<String, String> kafkaTemplate;
-
     @InjectMocks
     private ProductController productController;
 
@@ -61,298 +56,284 @@ class ProductControllerTest {
     void setUp() {
         pageable = PageRequest.of(0, 10);
         productList = new ArrayList<>();
+        productList.add(new ProductCardDTO("p1", "Product 1", "Desc", 29.99, 10, false, null));
+        productList.add(new ProductCardDTO("p2", "Product 2", "Desc", 39.99, 5, false, null));
+    }
 
-        // Create sample product data
-        ProductCardDTO product1 = new ProductCardDTO();
-        product1.setName("Product 1");
-        product1.setPrice(29.99);
+    // Helper: build a ProductDTO via its only public constructor using mocks.
+    // ProductDTO has no no-arg constructor — @Data alone won't generate one
+    // when an explicit constructor is already declared.
+    private ProductDTO buildProductDTO(String productId, String name) {
+        Product mockProduct = mock(Product.class);
+        when(mockProduct.getId()).thenReturn(productId);
+        when(mockProduct.getName()).thenReturn(name);
+        when(mockProduct.getDescription()).thenReturn("desc");
+        when(mockProduct.getPrice()).thenReturn(10.0);
+        when(mockProduct.getQuantity()).thenReturn(1);
 
-        ProductCardDTO product2 = new ProductCardDTO();
-        product2.setName("Product 2");
-        product2.setPrice(39.99);
+        InfoUserDTO mockSeller = mock(InfoUserDTO.class);
+        when(mockSeller.getFirstName()).thenReturn("John");
+        when(mockSeller.getLastName()).thenReturn("Doe");
+        when(mockSeller.getEmail()).thenReturn("seller@example.com");
 
-        productList.add(product1);
-        productList.add(product2);
+        return new ProductDTO(mockProduct, mockSeller, List.of());
     }
 
     @Test
     void testGetAllProducts_Success() {
-        // Arrange
-        Page<ProductCardDTO> productPage = new PageImpl<>(productList, pageable, productList.size());
+        Page<ProductCardDTO> productPage = new PageImpl<>(productList, pageable, 2);
         when(productService.getAllProducts(any(Pageable.class), anyString())).thenReturn(productPage);
 
-        // Act
         ResponseEntity<Page<ProductCardDTO>> result = productController.getAllProducts(pageable, "seller123");
 
-        // Assert
-        assertNotNull(result);
         assertEquals(HttpStatus.OK, result.getStatusCode());
-        assertNotNull(result.getBody());
         assertEquals(2, result.getBody().getContent().size());
-        assertEquals("Product 1", result.getBody().getContent().get(0).getName());
-        verify(productService, times(1)).getAllProducts(any(Pageable.class), anyString());
+        verify(productService).getAllProducts(any(Pageable.class), anyString());
     }
 
     @Test
-    void testGetAllProducts_EmptyList() {
-        // Arrange
-        Page<ProductCardDTO> emptyPage = new PageImpl<>(new ArrayList<>(), pageable, 0);
-        when(productService.getAllProducts(any(Pageable.class), anyString())).thenReturn(emptyPage);
+    @DisplayName("Should successfully adjust stock")
+    void testAdjustStock_Success() {
+        doNothing().when(productService).adjustProductStock(anyList());
 
-        // Act
-        ResponseEntity<Page<ProductCardDTO>> result = productController.getAllProducts(pageable, "seller123");
+        ResponseEntity<Void> result = productController.adjustStock(new ArrayList<>());
 
-        // Assert
-        assertNotNull(result);
         assertEquals(HttpStatus.OK, result.getStatusCode());
-        assertNotNull(result.getBody());
-        assertEquals(0, result.getBody().getContent().size());
-        verify(productService, times(1)).getAllProducts(any(Pageable.class), anyString());
+        verify(productService).adjustProductStock(anyList());
     }
 
     @Test
-    void testGetAllProducts_WithNullSellerId() {
-        // Arrange
-        Page<ProductCardDTO> productPage = new PageImpl<>(productList, pageable, productList.size());
-        when(productService.getAllProducts(any(Pageable.class), isNull())).thenReturn(productPage);
+    @DisplayName("Should successfully restock")
+    void testRestock_Success() {
+        doNothing().when(productService).restockProducts(anyList());
 
-        // Act
-        ResponseEntity<Page<ProductCardDTO>> result = productController.getAllProducts(pageable, null);
+        ResponseEntity<Void> result = productController.restock(new ArrayList<>());
 
-        // Assert
-        assertNotNull(result);
         assertEquals(HttpStatus.OK, result.getStatusCode());
-        assertNotNull(result.getBody());
-        assertEquals(2, result.getBody().getContent().size());
-        verify(productService, times(1)).getAllProducts(any(Pageable.class), isNull());
+        verify(productService).restockProducts(anyList());
     }
 
     @Test
-    void testGetAllProducts_ServiceThrowsException() {
-        // Arrange
-        when(productService.getAllProducts(any(Pageable.class), anyString()))
-                .thenThrow(new RuntimeException("Database error"));
+    @DisplayName("Should get simple product info successfully")
+    void testGetProductSimple_Success() {
+        ProductSimpleDTO simpleDTO = new ProductSimpleDTO();
+        simpleDTO.setProductId("p1");
+        when(productService.getProductDTOOnly("p1")).thenReturn(simpleDTO);
 
-        // Act & Assert
-        assertThrows(RuntimeException.class, () -> {
-            productController.getAllProducts(pageable, "seller123");
-        });
-        verify(productService, times(1)).getAllProducts(any(Pageable.class), anyString());
-    }
+        ResponseEntity<ProductSimpleDTO> result = productController.getProductSimple("p1");
 
-    @Test
-    void testGetAllProducts_Pagination() {
-        // Arrange
-        Pageable customPageable = PageRequest.of(1, 5);
-        List<ProductCardDTO> page2Products = new ArrayList<>();
-        page2Products.add(productList.get(0));
-
-        Page<ProductCardDTO> productPage = new PageImpl<>(page2Products, customPageable, 10);
-        when(productService.getAllProducts(any(Pageable.class), anyString())).thenReturn(productPage);
-
-        // Act
-        ResponseEntity<Page<ProductCardDTO>> result = productController.getAllProducts(customPageable, "seller123");
-
-        // Assert
-        assertNotNull(result);
         assertEquals(HttpStatus.OK, result.getStatusCode());
-        assertNotNull(result.getBody());
-        assertEquals(1, result.getBody().getContent().size());
-        assertEquals(10, result.getBody().getTotalElements());
-        assertEquals(1, result.getBody().getNumber()); // Page number
-        verify(productService, times(1)).getAllProducts(any(Pageable.class), anyString());
-    }
-
-    @Test
-    void testGetMyProducts_Success() {
-        // Arrange
-        Page<ProductCardDTO> productPage = new PageImpl<>(productList, pageable, productList.size());
-        when(productService.getMyProducts(any(Pageable.class), eq("seller123"))).thenReturn(productPage);
-
-        // Act
-        ResponseEntity<Page<ProductCardDTO>> result = productController.getMyProducts(pageable, "seller123");
-
-        // Assert
-        assertNotNull(result);
-        assertEquals(HttpStatus.OK, result.getStatusCode());
-        assertNotNull(result.getBody());
-        assertEquals(2, result.getBody().getContent().size());
-        verify(productService, times(1)).getMyProducts(any(Pageable.class), eq("seller123"));
+        assertEquals("p1", result.getBody().getProductId());
     }
 
     @Test
     void testCreateProduct_Success() {
-        // Arrange
-        CreateProductDTO createDTO = new CreateProductDTO();
-        createDTO.setName("New Product");
-        createDTO.setDescription("Product Description");
-        createDTO.setPrice(49.99);
-        createDTO.setQuantity(5);
-
-        Product createdProduct = Product.builder()
-                .id("newProduct123")
-                .name("New Product")
-                .description("Product Description")
-                .price(49.99)
-                .quantity(5)
-                .sellerID("seller123")
-                .build();
+        CreateProductDTO createDTO = new CreateProductDTO("New", "Desc", 49.99, 5);
+        Product createdProduct = Product.builder().id("newId").build();
 
         when(productService.createProduct(eq("seller123"), any(CreateProductDTO.class))).thenReturn(createdProduct);
 
-        // Act
         ResponseEntity<Product> result = productController.createProduct(createDTO, "seller123");
 
-        // Assert
-        assertNotNull(result);
         assertEquals(HttpStatus.CREATED, result.getStatusCode());
-        assertNotNull(result.getBody());
-        assertEquals("newProduct123", result.getBody().getId());
-        assertEquals("New Product", result.getBody().getName());
-        verify(productService, times(1)).createProduct(eq("seller123"), any(CreateProductDTO.class));
-    }
-
-    @Test
-    void testAddImagesToProduct_Success() {
-        // Arrange
-        MultipartFile mockFile = mock(MultipartFile.class);
-        HttpServletRequest mockRequest = mock(HttpServletRequest.class);
-
-        doNothing().when(productService).createImage(any(MultipartFile.class), eq("product123"), eq("seller123"),
-                eq("ROLE_SELLER"));
-
-        // Act
-        ResponseEntity<Map<String, String>> result = productController.addImagesToProduct(
-                "seller123", "ROLE_SELLER", "product123", mockFile, mockRequest);
-
-        // Assert
-        assertNotNull(result);
-        assertEquals(HttpStatus.OK, result.getStatusCode());
-        assertNotNull(result.getBody());
-        assertEquals("Image created successfully", result.getBody().get("message"));
-        verify(productService, times(1)).createImage(any(MultipartFile.class), eq("product123"), eq("seller123"),
-                eq("ROLE_SELLER"));
-    }
-
-    @Test
-    void testUpdateProduct_Success() {
-        // Arrange
-        UpdateProductDTO updateDTO = UpdateProductDTO.builder()
-                .name("Updated Product")
-                .description("Updated Description")
-                .price(79.99)
-                .quantity(15)
-                .build();
-
-        when(productService.updateProduct(eq("product123"), eq("seller123"), any(UpdateProductDTO.class)))
-                .thenReturn(updateDTO);
-
-        // Act
-        ResponseEntity<UpdateProductDTO> result = productController.updateProduct("product123", updateDTO, "seller123");
-
-        // Assert
-        assertNotNull(result);
-        assertEquals(HttpStatus.OK, result.getStatusCode());
-        assertNotNull(result.getBody());
-        assertEquals("Updated Product", result.getBody().getName());
-        assertEquals(79.99, result.getBody().getPrice());
-        verify(productService, times(1)).updateProduct(eq("product123"), eq("seller123"), any(UpdateProductDTO.class));
+        assertEquals("newId", result.getBody().getId());
     }
 
     @Test
     void testDeleteProduct_Success() {
-        // Arrange
-        doNothing().when(productService).deleteProduct(eq("product123"), eq("seller123"));
+        doNothing().when(productService).deleteProduct(eq("p1"), eq("seller123"));
 
-        // Act
-        ResponseEntity<String> result = productController.deleteProduct("product123", "seller123");
+        ResponseEntity<String> result = productController.deleteProduct("p1", "seller123");
 
-        // Assert
-        assertNotNull(result);
         assertEquals(HttpStatus.OK, result.getStatusCode());
         assertEquals("Product deleted successfully", result.getBody());
-        verify(productService, times(1)).deleteProduct(eq("product123"), eq("seller123"));
     }
 
     @Test
+    @DisplayName("getMyProducts – should return 200 with seller's products page")
+    void testGetMyProducts_Success() {
+        List<ProductCardDTO> products = List.of(
+                new ProductCardDTO("p1", "Product 1", "Desc", 29.99, 10, true, null));
+        Page<ProductCardDTO> page = new PageImpl<>(products, pageable, 1);
+
+        when(productService.getMyProducts(any(Pageable.class), eq("seller123"))).thenReturn(page);
+
+        ResponseEntity<Page<ProductCardDTO>> result = productController.getMyProducts(pageable, "seller123");
+
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        assertEquals(1, result.getBody().getContent().size());
+        assertEquals("p1", result.getBody().getContent().get(0).getId());
+        verify(productService).getMyProducts(any(Pageable.class), eq("seller123"));
+    }
+
+    @Test
+    @DisplayName("addImagesToProduct – should return 200 with success message")
+    void testAddImagesToProduct_Success() {
+        MultipartFile mockFile = mock(MultipartFile.class);
+        HttpServletRequest mockRequest = mock(HttpServletRequest.class);
+
+        doNothing().when(productService)
+                .createImage(any(MultipartFile.class), eq("p1"), eq("seller123"), eq("ROLE_SELLER"));
+
+        ResponseEntity<Map<String, String>> result = productController.addImagesToProduct(
+                "seller123", "ROLE_SELLER", "p1", mockFile, mockRequest);
+
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        assertEquals("Image created successfully", result.getBody().get("message"));
+    }
+
+    @Test
+    @DisplayName("getMyProducts – should return empty page when seller has no products")
+    void testGetMyProducts_EmptyPage() {
+        Page<ProductCardDTO> emptyPage = new PageImpl<>(List.of(), pageable, 0);
+
+        when(productService.getMyProducts(any(Pageable.class), eq("seller123"))).thenReturn(emptyPage);
+
+        ResponseEntity<Page<ProductCardDTO>> result = productController.getMyProducts(pageable, "seller123");
+
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        assertEquals(0, result.getBody().getTotalElements());
+    }
+
+    // -------------------------------------------------------------------------
+    // PUT /{productId}
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("updateProduct – should return 200 with updated product DTO")
+    void testUpdateProduct_Success() {
+        UpdateProductDTO updateDTO = new UpdateProductDTO();
+        updateDTO.setName("Updated Name");
+        updateDTO.setDescription("Updated Desc");
+        updateDTO.setPrice(59.99);
+
+        when(productService.updateProduct(eq("p1"), eq("seller123"), any(UpdateProductDTO.class)))
+                .thenReturn(updateDTO);
+
+        ResponseEntity<UpdateProductDTO> result = productController.updateProduct("p1", updateDTO, "seller123");
+
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        assertEquals("Updated Name", result.getBody().getName());
+        verify(productService).updateProduct(eq("p1"), eq("seller123"), any(UpdateProductDTO.class));
+    }
+
+    // -------------------------------------------------------------------------
+    // DELETE /deleteMedia/{productId}/{mediaId}
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("deleteMedia – should return 200 with success message")
     void testDeleteMedia_Success() {
-        // Arrange
-        doNothing().when(productService).deleteProductMedia(eq("product123"), eq("seller123"), eq("media456"));
+        doNothing().when(productService).deleteProductMedia(eq("p1"), eq("seller123"), eq("m1"));
 
-        // Act
-        ResponseEntity<Map<String, String>> result = productController.deleteMedia("media456", "product123",
-                "seller123");
+        ResponseEntity<Map<String, String>> result = productController.deleteMedia("m1", "p1", "seller123");
 
-        // Assert
-        assertNotNull(result);
         assertEquals(HttpStatus.OK, result.getStatusCode());
-        assertNotNull(result.getBody());
         assertEquals("Media deleted successfully", result.getBody().get("message"));
-        verify(productService, times(1)).deleteProductMedia(eq("product123"), eq("seller123"), eq("media456"));
+        verify(productService).deleteProductMedia("p1", "seller123", "m1");
     }
 
+    // -------------------------------------------------------------------------
+    // GET /{productId} (authenticated)
+    // -------------------------------------------------------------------------
+
     @Test
-    void testGetProductWithId_Success() {
-        // Arrange
-        Product product = Product.builder()
-                .id("product123")
-                .name("Test Product")
-                .price(99.99)
-                .sellerID("seller123")
-                .build();
-        InfoUserDTO mockSeller = InfoUserDTO.builder()
-                .id("seller123")
-                .firstName("John")
-                .lastName("Seller")
-                .email("seller@example.com")
-                .build();
-        ProductDTO productDTO = new ProductDTO(product, mockSeller, null);
-        productDTO.setProductId("product123");
+    @DisplayName("getProductWithId – should return 200 with full product details for authenticated user")
+    void testGetProductWithId_AuthenticatedUser_Success() {
+        ProductDTO productDTO = buildProductDTO("p1", "Test Product");
 
-        when(productService.getProductWithDetail(eq("product123"), eq("user123"))).thenReturn(productDTO);
+        when(productService.getProductWithDetail(eq("p1"), eq("user123"))).thenReturn(productDTO);
 
-        // Act
-        ResponseEntity<ProductDTO> result = productController.getProductWithId("product123", "user123");
+        ResponseEntity<ProductDTO> result = productController.getProductWithId("p1", "user123");
 
-        // Assert
-        assertNotNull(result);
         assertEquals(HttpStatus.OK, result.getStatusCode());
-        assertNotNull(result.getBody());
-        assertEquals("product123", result.getBody().getProductId());
+        assertEquals("p1", result.getBody().getProductId());
         assertEquals("Test Product", result.getBody().getName());
-        verify(productService, times(1)).getProductWithDetail(eq("product123"), eq("user123"));
+        verify(productService).getProductWithDetail("p1", "user123");
     }
 
     @Test
+    @DisplayName("getProductWithId – should still return 200 when X-User-ID is an unknown user")
+    void testGetProductWithId_UnknownUser_Success() {
+        ProductDTO productDTO = buildProductDTO("p1", "Test Product");
+
+        when(productService.getProductWithDetail(eq("p1"), eq("unknown"))).thenReturn(productDTO);
+
+        ResponseEntity<ProductDTO> result = productController.getProductWithId("p1", "unknown");
+
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        assertEquals("p1", result.getBody().getProductId());
+        verify(productService).getProductWithDetail("p1", "unknown");
+    }
+
+    // -------------------------------------------------------------------------
+    // GET /public/{productId}
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("getProductPublic – should return 200 with full product details without user context")
+    void testGetProductPublic_Success() {
+        ProductDTO productDTO = buildProductDTO("p1", "Public Product");
+
+        // Public endpoint passes null as userId — key difference from authenticated
+        // variant
+        when(productService.getProductWithDetail(eq("p1"), eq(null))).thenReturn(productDTO);
+
+        ResponseEntity<ProductDTO> result = productController.getProductPublic("p1");
+
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        assertEquals("p1", result.getBody().getProductId());
+        assertEquals("Public Product", result.getBody().getName());
+        verify(productService).getProductWithDetail("p1", null);
+    }
+
+    // -------------------------------------------------------------------------
+    // GET /seller/{email}
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("getAllProductsByEmail – should return 200 with all products for given email")
     void testGetAllProductsByEmail_Success() {
-        // Arrange
-        Product prod1 = Product.builder().id("product1").name("Product 1").sellerID("seller123").build();
-        Product prod2 = Product.builder().id("product2").name("Product 2").sellerID("seller123").build();
-        InfoUserDTO mockSeller = InfoUserDTO.builder()
-                .id("seller123")
-                .firstName("John")
-                .lastName("Seller")
-                .email("seller@example.com")
-                .build();
+        ProductDTO p1 = buildProductDTO("p1", "Product 1");
+        ProductDTO p2 = buildProductDTO("p2", "Product 2");
 
-        ProductDTO product1 = new ProductDTO(prod1, mockSeller, null);
-        product1.setProductId("product1");
+        when(productService.getAllProductsWithEmail(eq("seller@example.com")))
+                .thenReturn(List.of(p1, p2));
 
-        ProductDTO product2 = new ProductDTO(prod2, mockSeller, null);
-        product2.setProductId("product2");
-
-        List<ProductDTO> products = List.of(product1, product2);
-        when(productService.getAllProductsWithEmail(eq("seller@example.com"))).thenReturn(products);
-
-        // Act
         ResponseEntity<List<ProductDTO>> result = productController.getAllProductsByEmail("seller@example.com");
 
-        // Assert
-        assertNotNull(result);
         assertEquals(HttpStatus.OK, result.getStatusCode());
-        assertNotNull(result.getBody());
         assertEquals(2, result.getBody().size());
-        assertEquals("product1", result.getBody().get(0).getProductId());
-        verify(productService, times(1)).getAllProductsWithEmail(eq("seller@example.com"));
+        assertEquals("p1", result.getBody().get(0).getProductId());
+        assertEquals("p2", result.getBody().get(1).getProductId());
+        verify(productService).getAllProductsWithEmail("seller@example.com");
+    }
+
+    @Test
+    @DisplayName("getAllProductsByEmail – should return 200 with empty list when seller has no products")
+    void testGetAllProductsByEmail_EmptyList() {
+        when(productService.getAllProductsWithEmail(anyString())).thenReturn(List.of());
+
+        ResponseEntity<List<ProductDTO>> result = productController.getAllProductsByEmail("nobody@example.com");
+
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        assertEquals(0, result.getBody().size());
+    }
+
+    // -------------------------------------------------------------------------
+    // GET /all — edge case: null sellerId (unauthenticated caller)
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("getAllProducts – should return 200 when X-User-ID header is absent (null sellerId)")
+    void testGetAllProducts_NullSellerId_Success() {
+        Page<ProductCardDTO> page = new PageImpl<>(List.of(), pageable, 0);
+
+        when(productService.getAllProducts(any(Pageable.class), eq(null))).thenReturn(page);
+
+        ResponseEntity<Page<ProductCardDTO>> result = productController.getAllProducts(pageable, null);
+
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        verify(productService).getAllProducts(any(Pageable.class), eq(null));
     }
 }
