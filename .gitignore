@@ -56,3 +56,5 @@ logs/
 
 # SonarQube
 .scannerwork/
+
+*.tar
