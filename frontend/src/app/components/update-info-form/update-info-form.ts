@@ -10,8 +10,9 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-
 import { MatDividerModule } from '@angular/material/divider';
+import { MatIconModule } from '@angular/material/icon';
+
 @Component({
   selector: 'app-update-info-form',
   standalone: true,
@@ -22,14 +23,15 @@ import { MatDividerModule } from '@angular/material/divider';
     MatInputModule,
     MatButtonModule,
     MatProgressSpinnerModule,
-    MatDividerModule
+    MatDividerModule,
+    MatIconModule
   ],
   templateUrl: './update-info-form.html',
-  styleUrls: ['./update-info-form.css']
+  styleUrls: ['./update-info-form.scss'] // Updated to SCSS
 })
 export class UpdateInfoForm implements OnInit {
-  @Input() currentUser!: User; // We receive the current user
-  @Output() close = new EventEmitter<boolean>(); // Emits 'true' on success
+  @Input() currentUser!: User; 
+  @Output() close = new EventEmitter<boolean>(); 
 
   updateForm: FormGroup;
   isLoading = false;
@@ -44,13 +46,12 @@ export class UpdateInfoForm implements OnInit {
       firstName: ['', Validators.minLength(2)],
       lastName: ['', Validators.minLength(2)],
       email: ['', Validators.email],
-      currentPassword: [''], // Will add validator conditionally
+      currentPassword: [''], 
       newPassword: ['', Validators.minLength(5)]
     });
   }
 
   ngOnInit(): void {
-    // Pre-fill the form with the user's current data
     if (this.currentUser) {
       this.updateForm.patchValue({
         firstName: this.currentUser.firstName,
@@ -72,21 +73,11 @@ export class UpdateInfoForm implements OnInit {
     const formValues = this.updateForm.value;
     const dto: UpdateUserDTO = {};
 
-    // Only add fields to the DTO if they were actually changed
-    if (formValues.firstName !== this.currentUser.firstName) {
-      dto.firstName = formValues.firstName;
-    }
-    if (formValues.lastName !== this.currentUser.lastName) {
-      dto.lastName = formValues.lastName;
-    }
-    if (formValues.email !== this.currentUser.email) {
-      dto.email = formValues.email;
-    }
-    if (formValues.newPassword) {
-      dto.newPassword = formValues.newPassword;
-    }
+    if (formValues.firstName !== this.currentUser.firstName) dto.firstName = formValues.firstName;
+    if (formValues.lastName !== this.currentUser.lastName) dto.lastName = formValues.lastName;
+    if (formValues.email !== this.currentUser.email) dto.email = formValues.email;
+    if (formValues.newPassword) dto.newPassword = formValues.newPassword;
 
-    // If they are changing email or password, they MUST provide currentPassword
     if (dto.email || dto.newPassword) {
       if (!formValues.currentPassword) {
         this.updateForm.controls['currentPassword'].setErrors({ required: true });
@@ -98,10 +89,9 @@ export class UpdateInfoForm implements OnInit {
     }
 
     this.userService.updateUser(dto).subscribe({
-      next: (response) => {
+      next: () => {
         this.isLoading = false;
         this.successMessage = 'Profile updated successfully!';
-        // Wait 2 seconds, then emit success and close
         setTimeout(() => this.close.emit(true), 2000);
       },
       error: (err) => {
@@ -112,6 +102,6 @@ export class UpdateInfoForm implements OnInit {
   }
 
   onCancel(): void {
-    this.close.emit(false); // Emit 'false' on cancel
+    this.close.emit(false); 
   }
 }

@@ -1,0 +1,123 @@
+// Define variables locally if you don't have a global styles.scss setup yet
+$navy: #1a237e;
+$green: #2e7d32;
+$green-dark: #1b5e20;
+$white: #ffffff;
+$grey-light: #f5f7fa;
+$grey-border: #e2e8f0;
+$text-main: #334155;
+
+.auth-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: calc(100vh - 120px);
+  padding: 20px;
+  background-color: $grey-light;
+
+  .auth-card {
+    width: 100%;
+    max-width: 420px;
+    background-color: $white;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+    padding: 40px 30px;
+
+    h2 {
+      text-align: center;
+      color: $navy;
+      margin: 0 0 8px;
+      font-size: 1.75rem;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #64748b;
+      margin-bottom: 24px;
+      font-size: 0.95rem;
+    }
+
+    .error-message {
+      background-color: #fef2f2;
+      color: #b91c1c;
+      border: 1px solid #fecaca;
+      border-radius: 6px;
+      padding: 12px;
+      text-align: center;
+      margin-bottom: 20px;
+      font-size: 0.9rem;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: $text-main;
+        font-size: 0.9rem;
+      }
+
+      input {
+        width: 100%;
+        padding: 12px 16px;
+        border: 1px solid $grey-border;
+        border-radius: 6px;
+        box-sizing: border-box;
+        font-size: 1rem;
+        transition: all 0.2s ease;
+        outline: none;
+
+        &:focus {
+          border-color: $navy;
+          box-shadow: 0 0 0 3px rgba(26, 35, 126, 0.1);
+        }
+      }
+    }
+
+    button[type="submit"] {
+      width: 100%;
+      padding: 14px;
+      margin-top: 10px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 600;
+      background-color: $green;
+      color: $white;
+      transition: all 0.2s ease;
+
+      &:hover:not(:disabled) {
+        background-color: $green-dark;
+        transform: translateY(-1px);
+      }
+
+      &:disabled {
+        background-color: #94a3b8;
+        cursor: not-allowed;
+        opacity: 0.7;
+      }
+    }
+
+    .footer-text {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 0.95rem;
+      color: #64748b;
+
+      a {
+        color: $navy;
+        text-decoration: none;
+        font-weight: 600;
+        transition: color 0.2s ease;
+
+        &:hover {
+          color: var(--navy-light);
+          text-decoration: underline;
+        }
+      }
+    }
+  }
+}

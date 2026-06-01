@@ -1,0 +1,62 @@
+.sidenav-container {
+  height: 100%;
+  background-color: var(--white);
+  display: flex;
+  flex-direction: column;
+}
+
+.custom-nav-list {
+  padding-top: 16px;
+
+  /* Target internal Material list items to override default padding */
+  ::ng-deep .mdc-list-item {
+    margin: 4px 12px;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    color: var(--text-main);
+
+    /* Hover effect for all items EXCEPT the logout button */
+    &:hover:not(.logout-item) {
+      background-color: var(--grey-light);
+      color: var(--navy);
+      
+      mat-icon {
+        color: var(--navy);
+      }
+    }
+
+    /* Active Route Styling (Highlights where the user currently is) */
+    &.active-link {
+      background-color: rgba(46, 125, 50, 0.1); /* Transparent version of our Green */
+      color: var(--green-dark);
+      font-weight: 600;
+
+      mat-icon {
+        color: var(--green);
+      }
+    }
+  }
+
+  mat-icon {
+    color: var(--text-muted);
+    transition: color 0.2s ease;
+  }
+}
+
+.nav-divider {
+  margin: 16px 0;
+}
+
+/* Custom styling for the destructive logout action */
+.logout-item {
+  margin-top: 8px;
+  
+  &:hover {
+    background-color: #fef2f2 !important; /* Material Light Red */
+  }
+
+  .text-warn {
+    color: #d32f2f; /* Material Deep Red */
+    font-weight: 500;
+  }
+}

@@ -1,57 +1,59 @@
-<h2 mat-dialog-title style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
-  <mat-icon style="color: #1976d2; font-size: 1.5rem; width: 1.5rem; height: 1.5rem;">shopping_cart</mat-icon>
-  <span>Add to Cart</span>
-</h2>
-
-<mat-dialog-content>
-  <div class="product-info">
-    <h3>{{ data.productName }}</h3>
-    <p class="price">{{ data.price | currency:'USD' }} each</p>
-    <p class="stock" [class.low-stock]="data.availableStock < 10">
-      <mat-icon>inventory_2</mat-icon>
-      {{ data.availableStock }} available in stock
-    </p>
+<div class="dialog-container">
+  <div class="dialog-header">
+    <h2 mat-dialog-title>
+      <mat-icon class="header-icon">shopping_cart</mat-icon>
+      <span>Add to Cart</span>
+    </h2>
   </div>
 
-  <div class="quantity-selector">
-    <label>Quantity:</label>
-    <div class="quantity-controls">
-      <button mat-icon-button (click)="decreaseQuantity()" [disabled]="quantity <= 1">
-        <mat-icon>remove</mat-icon>
-      </button>
-      
-      <mat-form-field appearance="outline">
-        <input 
-          matInput 
-          type="number" 
-          [(ngModel)]="quantity"
-          [min]="1"
-          [max]="data.availableStock">
-      </mat-form-field>
-      
-      <button mat-icon-button (click)="increaseQuantity()" [disabled]="quantity >= data.availableStock">
-        <mat-icon>add</mat-icon>
-      </button>
+  <mat-dialog-content class="dialog-content">
+
+    <div class="product-info">
+      <h3>{{ data.productName }}</h3>
+      <p class="price">{{ data.price | currency:'USD' }} <span class="unit">each</span></p>
+
+      <div class="stock-indicator" [class.low-stock]="data.availableStock < 10">
+        <mat-icon>{{ data.availableStock < 10 ? 'warning_amber' : 'check_circle' }}</mat-icon>
+            <span>{{ data.availableStock }} available in stock</span>
+      </div>
     </div>
-  </div>
 
-  <div class="total">
-    <span>Total:</span>
-    <span class="total-price">{{ getTotalPrice() | currency:'USD' }}</span>
-  </div>
-</mat-dialog-content>
+    <div class="quantity-section">
+      <label class="section-label">Select Quantity</label>
 
-<mat-dialog-actions align="end">
-  <button mat-button (click)="onCancel()" [disabled]="addingToCart">
-    Cancel
-  </button>
-  <button 
-    mat-raised-button 
-    color="primary" 
-    (click)="onConfirm()"
-    [disabled]="quantity < 1 || quantity > data.availableStock || addingToCart">
-    <mat-icon *ngIf="!addingToCart" style="margin-right: 0.5rem;">add_shopping_cart</mat-icon>
-    <span *ngIf="!addingToCart">Add to Cart</span>
-    <span *ngIf="addingToCart">Adding...</span>
-  </button>
-</mat-dialog-actions>
+      <div class="quantity-controls">
+        <button mat-icon-button (click)="decreaseQuantity()" [disabled]="quantity <= 1" class="qty-btn">
+          <mat-icon>remove</mat-icon>
+        </button>
+
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="qty-input">
+          <input matInput type="number" [(ngModel)]="quantity" [min]="1" [max]="data.availableStock"
+            class="center-text">
+        </mat-form-field>
+
+        <button mat-icon-button (click)="increaseQuantity()" [disabled]="quantity >= data.availableStock"
+          class="qty-btn">
+          <mat-icon>add</mat-icon>
+        </button>
+      </div>
+    </div>
+
+    <div class="total-summary">
+      <span class="total-label">Total Amount:</span>
+      <span class="total-price">{{ getTotalPrice() | currency:'USD' }}</span>
+    </div>
+
+  </mat-dialog-content>
+
+  <mat-dialog-actions class="dialog-actions">
+    <button mat-button (click)="onCancel()" [disabled]="addingToCart" class="cancel-btn">
+      Cancel
+    </button>
+    <button mat-flat-button (click)="onConfirm()"
+      [disabled]="quantity < 1 || quantity > data.availableStock || addingToCart" class="confirm-btn">
+      <mat-icon *ngIf="!addingToCart">add_shopping_cart</mat-icon>
+      <span *ngIf="!addingToCart">Add to Cart</span>
+      <span *ngIf="addingToCart">Adding...</span>
+    </button>
+  </mat-dialog-actions>
+</div>

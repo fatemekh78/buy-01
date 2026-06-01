@@ -1,106 +1,67 @@
 /* -------------------------------------------------
-   1. IMPORTS – MUST BE FIRST
+   1. ANGULAR MATERIAL CORE
    ------------------------------------------------- */
 @use '@angular/material' as mat;
-
-/* -------------------------------------------------
-   2. CORE
-   ------------------------------------------------- */
 @include mat.core();
 
 /* -------------------------------------------------
-   3. CUSTOM PALETTES
-   ------------------------------------------------- */
-$navy-palette: (
-  50: #e8eaf6,
-  100: #c5cbe9,
-  200: #9fa8da,
-  300: #7986cb,
-  400: #5c6bc0,
-  500: #3f51b5,
-  600: #3949ab,
-  700: #303f9f,
-  800: #283593,
-  900: #1a237e,
-  contrast: (
-    50: #000000,
-    100: #000000,
-    200: #000000,
-    300: #ffffff,
-    400: #ffffff,
-    500: #ffffff,
-    600: #ffffff,
-    700: #ffffff,
-    800: #ffffff,
-    900: #ffffff,
-  )
-);
-
-$green-palette: (
-  50: #e8f5e9,
-  100: #c8e6c9,
-  200: #a5d6a7,
-  300: #81c784,
-  400: #66bb6a,
-  500: #4caf50,
-  600: #43a047,
-  700: #388e3c,
-  800: #2e7d32,
-  900: #1b5e20,
-  contrast: (
-    50: #000000,
-    100: #000000,
-    200: #000000,
-    300: #000000,
-    400: #000000,
-    500: #ffffff,
-    600: #ffffff,
-    700: #ffffff,
-    800: #ffffff,
-    900: #ffffff,
-  )
-);
-
-/* -------------------------------------------------
-   4. BUILD THEME – M2 COMPATIBILITY
-   ------------------------------------------------- */
-$my-primary: mat.m2-define-palette($navy-palette, 700);
-$my-accent : mat.m2-define-palette($green-palette, 500);
-
-$my-theme: mat.m2-define-light-theme((
-  color: (
-    primary: $my-primary,
-    accent: $my-accent,
-  ),
-  typography: mat.m2-define-typography-config(),
-  density: 0,
-));
-
-@include mat.all-component-themes($my-theme);
-
-/* -------------------------------------------------
-   5. GLOBAL CSS VARIABLES
+   2. GLOBAL CSS VARIABLES (Our Enterprise Design System)
    ------------------------------------------------- */
 :root {
-  --navy:       #{mat.m2-get-color-from-palette($my-primary, 'default')};
-  --navy-dark:  #{mat.m2-get-color-from-palette($my-primary, 'darker')};
-  --navy-light: #{mat.m2-get-color-from-palette($my-primary, 'lighter')};
+  /* Brand Colors */
+  --navy: #1a237e;
+  --navy-dark: #121858;
+  --navy-light: #535a9f;
 
-  --green:      #{mat.m2-get-color-from-palette($my-accent, 'default')};
-  --green-dark: #{mat.m2-get-color-from-palette($my-accent, 'darker')};
+  --green: #2e7d32;
+  --green-dark: #1b5e20;
+  --green-light: #4caf50;
 
+  /* Neutrals & Backgrounds */
   --white: #ffffff;
-  --text-primary: #333;
-  --text-light: #f4f4f4;
-  --background-light: #f9f9f9;
+  --grey-light: #f5f7fa;
+  --grey-border: #e2e8f0;
+
+  /* Typography Colors */
+  --text-main: #334155;
+  --text-muted: #64748b;
 }
 
 /* -------------------------------------------------
-   6. GLOBAL STYLES
+   3. GLOBAL RESET & BASE STYLES
    ------------------------------------------------- */
+html,
 body {
+  height: 100%;
   margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+*,
+*:before,
+*:after {
+  box-sizing: inherit;
+}
+
+body {
   font-family: Roboto, "Helvetica Neue", sans-serif;
-  background-color: var(--background-light);
-  color: var(--text-primary);
+  background-color: var(--grey-light);
+  color: var(--text-main);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* -------------------------------------------------
+   4. MATERIAL 3 THEME DEFINITION
+   ------------------------------------------------- */
+html {
+  @include mat.theme((
+    color: (
+      primary: mat.$azure-palette,
+      tertiary: mat.$blue-palette,
+    ),
+    typography: Roboto,
+    density: 0,
+  ));
 }

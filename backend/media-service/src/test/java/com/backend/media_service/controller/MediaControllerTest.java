@@ -16,6 +16,7 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -27,11 +28,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.backend.common.dto.MediaUploadResponseDTO;
+import com.backend.common.exception.CustomException;
 import com.backend.media_service.model.Media;
 import com.backend.media_service.service.FileStorageService;
 import com.backend.media_service.service.MediaService;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("MediaController Unit Tests")
 class MediaControllerTest {
 
     @Mock
@@ -57,28 +61,33 @@ class MediaControllerTest {
                 "image/jpeg",
                 "test image content".getBytes());
 
-        mockMedia = new Media();
-        mockMedia.setId("test-media-id");
-        mockMedia.setImagePath("test-image.jpg");
-        mockMedia.setProductID("test-product-id");
+        // Utilizing the new @Builder pattern from the refactored Media model
+        mockMedia = Media.builder()
+                .id("test-media-id")
+                .imagePath("test-image.jpg")
+                .productId("test-product-id")
+                .build();
     }
 
     @Test
+    @DisplayName("Should successfully upload a product file")
     void testUploadFile_Success() {
         // Arrange
         String productId = "test-product-id";
         when(mediaService.uploadFile(any(MultipartFile.class), anyString())).thenReturn(mockMedia);
 
         // Act
-        ResponseEntity<?> response = mediaController.uploadFile(mockFile, productId);
+        ResponseEntity<MediaUploadResponseDTO> response = mediaController.uploadFile(mockFile, productId);
 
         // Assert
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
+        assertEquals("test-media-id", response.getBody().getFileId());
         verify(mediaService, times(1)).uploadFile(mockFile, productId);
     }
 
     @Test
+    @DisplayName("Should successfully upload a user avatar")
     void testUploadFileForAvatar_Success() {
         // Arrange
         String expectedFileName = "avatar-test.jpg";
@@ -95,15 +104,16 @@ class MediaControllerTest {
     }
 
     @Test
+    @DisplayName("Should successfully serve a file resource")
     void testGetFile_Success() throws Exception {
         // Arrange
         String filename = "test-image.jpg";
-        java.io.File mockFile = mock(java.io.File.class);
+        java.io.File physicalMockFile = mock(java.io.File.class);
         java.nio.file.Path mockPath = mock(java.nio.file.Path.class);
 
         when(fileStorageService.load(anyString())).thenReturn(resource);
-        when(resource.getFile()).thenReturn(mockFile);
-        when(mockFile.toPath()).thenReturn(mockPath);
+        when(resource.getFile()).thenReturn(physicalMockFile);
+        when(physicalMockFile.toPath()).thenReturn(mockPath);
 
         // Act
         ResponseEntity<Resource> response = mediaController.getFile(filename);
@@ -115,6 +125,7 @@ class MediaControllerTest {
     }
 
     @Test
+    @DisplayName("Should throw CustomException when file is invalid/empty")
     void testUploadFile_InvalidFile() {
         // Arrange
         MockMultipartFile emptyFile = new MockMultipartFile(
@@ -124,33 +135,38 @@ class MediaControllerTest {
                 new byte[0]);
         String productId = "test-product-id";
 
+        // Replaced generic RuntimeException with your CustomException
         when(mediaService.uploadFile(any(MultipartFile.class), anyString()))
-                .thenThrow(new RuntimeException("File is empty"));
+                .thenThrow(new CustomException("File is empty", HttpStatus.BAD_REQUEST));
 
         // Act & Assert
-        assertThrows(RuntimeException.class, () -> {
+        assertThrows(CustomException.class, () -> {
             mediaController.uploadFile(emptyFile, productId);
         });
     }
 
     @Test
+    @DisplayName("Should throw CustomException when file is not found on disk")
     void testGetFile_FileNotFound() {
         // Arrange
         String filename = "non-existent.jpg";
         when(fileStorageService.load(anyString()))
-                .thenThrow(new RuntimeException("File not found"));
+                .thenThrow(new CustomException("File not found", HttpStatus.NOT_FOUND));
 
         // Act & Assert
-        assertThrows(RuntimeException.class, () -> {
+        assertThrows(CustomException.class, () -> {
             mediaController.getFile(filename);
         });
     }
 
     @Test
+    @DisplayName("Should successfully delete media by ID")
     void testDeleteMediaById_Success() {
         // Arrange
         String mediaId = "test-media-id";
-        doNothing().when(mediaService).DeleteMediaByID(anyString());
+
+        // Note: Using the updated camelCase method name
+        doNothing().when(mediaService).deleteMediaById(anyString());
 
         // Act
         ResponseEntity<String> response = mediaController.deleteMediaById(mediaId);
@@ -158,25 +174,29 @@ class MediaControllerTest {
         // Assert
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals("Delete media successfully", response.getBody());
-        verify(mediaService, times(1)).DeleteMediaByID(mediaId);
+        verify(mediaService, times(1)).deleteMediaById(mediaId);
     }
 
     @Test
+    @DisplayName("Should fetch all media IDs/URLs for a product")
     void testGetMediaByIds_Success() {
         // Arrange
         String productId = "test-product-id";
-        when(mediaService.findMediaByProductID(anyString())).thenReturn(List.of());
+
+        // Note: Using the updated camelCase method name
+        when(mediaService.findMediaByProductId(anyString())).thenReturn(List.of());
 
         // Act
-        ResponseEntity<?> response = mediaController.getMediaByIds(productId);
+        ResponseEntity<List<MediaUploadResponseDTO>> response = mediaController.getMediaByIds(productId);
 
         // Assert
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
-        verify(mediaService, times(1)).findMediaByProductID(productId);
+        verify(mediaService, times(1)).findMediaByProductId(productId);
     }
 
     @Test
+    @DisplayName("Should fetch limited product image URLs")
     void testGetLimitedProductImageUrls_Success() {
         // Arrange
         String productId = "test-product-id";
@@ -194,6 +214,7 @@ class MediaControllerTest {
     }
 
     @Test
+    @DisplayName("Should fetch limited product image URLs using default limit")
     void testGetLimitedProductImageUrls_WithDefaultLimit() {
         // Arrange
         String productId = "test-product-id";

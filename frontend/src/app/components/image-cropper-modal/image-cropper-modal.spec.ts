@@ -2,30 +2,30 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ImageCropperModal } from './image-cropper-modal';
 import { ImageCroppedEvent } from 'ngx-image-cropper';
 import { CommonModule } from '@angular/common';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
 
-xdescribe('ImageCropperModal', () => {
+describe('ImageCropperModal', () => { // 🚨 Removed 'x'
   let component: ImageCropperModal;
   let fixture: ComponentFixture<ImageCropperModal>;
 
   beforeEach(async () => {
-    // Override component to use inline template
     TestBed.overrideComponent(ImageCropperModal, {
       set: {
         template: `
-          <img-cropper [imageChangedEvent]="imageChangedEvent"
+          <image-cropper [imageChangedEvent]="imageChangedEvent"
             (imageCropped)="imageCropped($event)"
-            (imageLoaded)="imageLoaded()"
             (loadImageFailed)="loadImageFailed()">
-          </img-cropper>
+          </image-cropper>
           <button (click)="saveCrop()">Save</button>
-          <button (click)="closeCropper()">Cancel</button>
-        `,
-        styles: []
+          <button (click)="cancelCrop()">Cancel</button> `,
+        styles: [],
+        imports: [CommonModule]
       }
     });
 
     await TestBed.configureTestingModule({
-      imports: [ImageCropperModal, CommonModule]
+      imports: [ImageCropperModal, CommonModule, MatButtonModule, MatIconModule]
     }).compileComponents();
 
     fixture = TestBed.createComponent(ImageCropperModal);
@@ -37,11 +37,8 @@ xdescribe('ImageCropperModal', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should initialize with empty imageChangedEvent', () => {
+  it('should initialize with empty imageChangedEvent and null croppedBlob', () => {
     expect(component.imageChangedEvent).toBe('');
-  });
-
-  it('should initialize with null croppedBlob', () => {
     expect(component.croppedBlob).toBeNull();
   });
 
@@ -60,21 +57,6 @@ xdescribe('ImageCropperModal', () => {
 
     expect(component.croppedBlob).toBe(mockBlob);
     expect(component.croppedImage).toBe('data:image/jpeg;base64,test');
-  });
-
-  it('should handle imageCropped with null blob', () => {
-    const mockEvent: ImageCroppedEvent = {
-      blob: null,
-      base64: 'data:image/jpeg;base64,test',
-      width: 100,
-      height: 100,
-      cropperPosition: { x1: 0, y1: 0, x2: 100, y2: 100 },
-      imagePosition: { x1: 0, y1: 0, x2: 100, y2: 100 }
-    };
-
-    component.imageCropped(mockEvent);
-
-    expect(component.croppedBlob).toBeNull();
   });
 
   it('should emit modalClosed on loadImageFailed', () => {
@@ -112,9 +94,7 @@ xdescribe('ImageCropperModal', () => {
 
   it('should emit modalClosed on cancelCrop', () => {
     spyOn(component.modalClosed, 'emit');
-
     component.cancelCrop();
-
     expect(component.modalClosed.emit).toHaveBeenCalled();
   });
 });

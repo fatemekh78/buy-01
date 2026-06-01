@@ -1,80 +1,61 @@
 <div class="cart-container">
-  <h1>Shopping Cart</h1>
+  <h1 class="page-title">Shopping Cart</h1>
 
-  <div *ngIf="isLoading" class="loading">
-    <p>Loading cart...</p>
+  <div *ngIf="isLoading" class="loading-state">
+    <mat-spinner diameter="40"></mat-spinner>
+    <p>Loading your cart...</p>
   </div>
 
   <div *ngIf="!isLoading && (!cart || cart.items.length === 0)" class="empty-cart">
-    <mat-icon>shopping_cart</mat-icon>
-    <p>Your cart is empty</p>
-    <button mat-raised-button color="primary" routerLink="/products">
-      Continue Shopping
-    </button>
+    <mat-icon class="empty-icon">shopping_cart_off</mat-icon>
+    <p>Your cart is empty.</p>
+    <button mat-flat-button color="primary" routerLink="/home">Continue Shopping</button>
   </div>
 
-  <div *ngIf="!isLoading && cart && cart.items.length > 0" class="cart-content">
+  <div *ngIf="!isLoading && cart && cart.items.length > 0" class="cart-grid">
     <div class="cart-items">
-      <mat-card *ngFor="let item of cart.items" class="cart-item">
-        <div class="item-image">
-          <img [src]="getImageUrl(item.productId)" [alt]="getProductName(item.productId)">
-        </div>
-        
-        <div class="item-details">
-          <h3>
-            <a [routerLink]="['/product', item.productId]">{{ getProductName(item.productId) }}</a>
-          </h3>
-          <p class="item-price">{{ getProductPrice(item.productId) | currency:'USD' }} each</p>
-        </div>
+      <mat-card *ngFor="let item of cart.items" class="cart-item-card">
+        <div class="item-content">
+          <img [src]="getImageUrl(item.productId)" [alt]="getProductName(item.productId)" class="item-img">
+          
+          <div class="item-info">
+            <h3><a [routerLink]="['/product', item.productId]">{{ getProductName(item.productId) }}</a></h3>
+            <p class="price-tag">{{ getProductPrice(item.productId) | currency:'USD' }} each</p>
+          </div>
 
-        <div class="item-quantity">
-          <mat-form-field appearance="outline">
-            <mat-label>Quantity</mat-label>
-            <input 
-              matInput 
-              type="number" 
-              [value]="item.quantity"
-              min="1"
-              (change)="updateQuantity(item, $any($event.target).value)">
+          <mat-form-field appearance="outline" class="qty-field">
+            <mat-label>Qty</mat-label>
+            <input matInput type="number" [value]="item.quantity" min="1" (change)="updateQuantity(item, $any($event.target).value)">
           </mat-form-field>
-        </div>
 
-        <div class="item-total">
-          <p>{{ getItemSubtotal(item) | currency:'USD' }}</p>
-        </div>
+          <div class="item-total">
+            {{ getItemSubtotal(item) | currency:'USD' }}
+          </div>
 
-        <div class="item-actions">
-          <button mat-icon-button color="warn" (click)="removeItem(item.productId)" title="Remove item">
-            <mat-icon>delete</mat-icon>
+          <button mat-icon-button color="warn" (click)="removeItem(item.productId)">
+            <mat-icon>delete_outline</mat-icon>
           </button>
         </div>
       </mat-card>
     </div>
 
-    <div class="cart-summary">
-      <mat-card>
-        <mat-card-header>
-          <mat-card-title>Order Summary</mat-card-title>
-        </mat-card-header>
-        <mat-card-content>
-          <div class="summary-row">
-            <span>Items ({{ cart.items.length }})</span>
-            <span>{{ getTotal() | currency:'USD' }}</span>
-          </div>
-          <div class="summary-row total">
-            <span><strong>Total</strong></span>
-            <span><strong>{{ getTotal() | currency:'USD' }}</strong></span>
-          </div>
-        </mat-card-content>
-        <mat-card-actions>
-          <button mat-stroked-button color="warn" (click)="clearCartItems()" class="clear-btn">
-            Clear Cart
-          </button>
-          <button mat-raised-button color="primary" (click)="proceedToCheckout()" class="checkout-btn">
-            Proceed to Checkout
-          </button>
-        </mat-card-actions>
+    <aside class="cart-summary">
+      <mat-card class="summary-card">
+        <h2 class="summary-title">Summary</h2>
+        <div class="summary-row">
+          <span>Subtotal</span>
+          <span>{{ getTotal() | currency:'USD' }}</span>
+        </div>
+        <mat-divider></mat-divider>
+        <div class="summary-total">
+          <span>Total</span>
+          <span class="total-price">{{ getTotal() | currency:'USD' }}</span>
+        </div>
+        <div class="actions">
+          <button mat-flat-button color="primary" (click)="proceedToCheckout()" class="checkout-btn">Checkout</button>
+          <button mat-stroked-button color="warn" (click)="clearCartItems()" class="clear-btn">Clear Cart</button>
+        </div>
       </mat-card>
-    </div>
+    </aside>
   </div>
 </div>

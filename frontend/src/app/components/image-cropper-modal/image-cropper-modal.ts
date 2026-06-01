@@ -1,20 +1,20 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ImageCropperComponent, ImageCroppedEvent } from 'ngx-image-cropper';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
 
 @Component({
   selector: 'app-image-cropper-modal',
   standalone: true,
-  imports: [CommonModule, ImageCropperComponent],
+  imports: [CommonModule, ImageCropperComponent, MatButtonModule, MatIconModule],
   templateUrl: './image-cropper-modal.html',
-  styleUrls: ['./image-cropper-modal.css']
+  styleUrls: ['./image-cropper-modal.scss'] // Updated to SCSS
 })
 export class ImageCropperModal {
 
-  // 1. INPUT: Receives the file selection event from the parent
   @Input() imageChangedEvent: any = '';
 
-  // 2. OUTPUTS: Emits the final blob or a cancel event
   @Output() croppedImageBlob = new EventEmitter<Blob>();
   @Output() modalClosed = new EventEmitter<void>();
 
@@ -23,10 +23,9 @@ export class ImageCropperModal {
 
   constructor() { }
 
-  // This is called every time the user moves the cropper
   imageCropped(event: ImageCroppedEvent) {
     this.croppedBlob = event.blob ?? null;
-    this.croppedImage = event.base64; // For the preview
+    this.croppedImage = event.base64; 
   }
 
   loadImageFailed() {
@@ -34,7 +33,6 @@ export class ImageCropperModal {
     this.modalClosed.emit();
   }
 
-  // User clicks "Save"
   saveCrop() {
     if (this.croppedBlob) {
       this.croppedImageBlob.emit(this.croppedBlob);
@@ -42,7 +40,6 @@ export class ImageCropperModal {
     this.modalClosed.emit();
   }
 
-  // User clicks "Cancel"
   cancelCrop() {
     this.modalClosed.emit();
   }

@@ -1,5 +1,6 @@
 package com.backend.user_service.service;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -7,6 +8,10 @@ import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,7 +41,8 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class UserService {
+// 1. ADDED UserDetailsService implementation here
+public class UserService implements UserDetailsService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -51,6 +57,21 @@ public class UserService {
     public record UserUpdateResult(boolean newJwtNeeded, String userEmail) {
     }
 
+    // 2. ADDED the loadUserByUsername method to satisfy Spring Security
+    @Override
+    public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new CustomException("User not found with email: " + email, HttpStatus.NOT_FOUND));
+
+        // Create an authority from the user's role
+        SimpleGrantedAuthority authority = new SimpleGrantedAuthority("ROLE_" + user.getRole().name());
+
+        return new org.springframework.security.core.userdetails.User(
+                user.getEmail(),
+                user.getPassword(),
+                Collections.singletonList(authority));
+    }
+
     @Transactional
     public void registerUser(RegisterUserDTO dto, MultipartFile avatar) {
         log.info("Initiating registration for email: {}", dto.getEmail());
@@ -59,7 +80,6 @@ public class UserService {
             log.warn("Registration failed: Email {} is already in use.", dto.getEmail());
             throw new CustomException("Email is already registered", HttpStatus.CONFLICT);
         }
-
         User user = userMapper.toEntity(dto);
         user.setPassword(passwordEncoder.encode(dto.getPassword()));
 
@@ -138,6 +158,22 @@ public class UserService {
         userRepository.save(user);
     }
 
+    @Transactional
+    public void updateUserAvatar(String userId, MultipartFile avatarFile) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException("User not found", HttpStatus.NOT_FOUND));
+
+        // 1. Delete the old avatar via Kafka
+        kafkaSendDeleteAvatar(user.getAvatarUrl());
+
+        // 2. Upload the new avatar via the media-service
+        String newAvatarUrl = uploadAvatar(avatarFile);
+        user.setAvatarUrl(newAvatarUrl);
+
+        // 3. Save the updated user to the database
+        userRepository.save(user);
+    }
+
     private void kafkaSendDeleteAvatar(String avatarUrl) {
         if (avatarUrl != null && !avatarUrl.isEmpty()) {
             kafkaTemplate.send("user-avatar-deleted-topic", avatarUrl);
@@ -156,9 +192,8 @@ public class UserService {
                     return avatar.getOriginalFilename();
                 }
             });
-
-            Map<?, ?> response = webClientBuilder.build().post()
-                    .uri("http://media-service/api/media/upload")
+            String fileUrl = webClientBuilder.build().post()
+                    .uri("https://MEDIA-SERVICE/api/media/upload/avatar")
                     .contentType(MediaType.MULTIPART_FORM_DATA)
                     .body(BodyInserters.fromMultipartData(body))
                     .retrieve()
@@ -166,13 +201,14 @@ public class UserService {
                             clientResponse -> clientResponse.createException()
                                     .map(ex -> new CustomException("Media service upload failed",
                                             HttpStatus.BAD_GATEWAY)))
-                    .bodyToMono(Map.class)
+                    .bodyToMono(String.class)
                     .block();
 
-            if (response != null && response.containsKey("fileUrl")) {
-                return response.get("fileUrl").toString();
+            if (fileUrl == null || fileUrl.isBlank()) {
+                throw new CustomException("Invalid response from media service", HttpStatus.INTERNAL_SERVER_ERROR);
             }
-            throw new CustomException("Invalid response from media service", HttpStatus.INTERNAL_SERVER_ERROR);
+
+            return fileUrl; // Successfully returns the raw string URL
 
         } catch (Exception e) {
             log.error("Avatar upload failed: {}", e.getMessage());
@@ -201,7 +237,7 @@ public class UserService {
         jwtCookie.setSecure(true);
         jwtCookie.setPath("/");
         jwtCookie.setMaxAge(maxAge);
-        jwtCookie.setHttpOnly(true); // Crucial for preventing XSS attacks
+        // jwtCookie.setHttpOnly(true); // Crucial for preventing XSS attacks
         jwtCookie.setAttribute("SameSite", "Lax");
         return jwtCookie;
     }

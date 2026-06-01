@@ -1,58 +1,71 @@
 <form [formGroup]="updateForm" (ngSubmit)="onSubmit()" class="update-form">
-  <h3>Update Your Information</h3>
-  <p>Only fill in the fields you wish to change.</p>
 
-  <mat-form-field appearance="fill">
-    <mat-label>First Name</mat-label>
-    <input matInput formControlName="firstName">
-  </mat-form-field>
+  <div class="form-header">
+    <h3>Update Your Information</h3>
+    <p class="subtitle">Only fill in the fields you wish to change.</p>
+  </div>
 
-  <mat-form-field appearance="fill">
-    <mat-label>Last Name</mat-label>
-    <input matInput formControlName="lastName">
-  </mat-form-field>
+  <div class="form-row">
+    <mat-form-field appearance="outline">
+      <mat-label>First Name</mat-label>
+      <input matInput formControlName="firstName">
+    </mat-form-field>
 
-  <mat-form-field appearance="fill">
-    <mat-label>Email</mat-label>
+    <mat-form-field appearance="outline">
+      <mat-label>Last Name</mat-label>
+      <input matInput formControlName="lastName">
+    </mat-form-field>
+  </div>
+
+  <mat-form-field appearance="outline" class="full-width">
+    <mat-label>Email Address</mat-label>
     <input matInput type="email" formControlName="email">
   </mat-form-field>
 
-  <mat-divider></mat-divider>
+  <mat-divider class="divider"></mat-divider>
 
-  <p class="password-note">
-    To change your <strong>Email</strong> or <strong>Password</strong>,
-    you must provide your Current Password.
-  </p>
+  <div class="password-section">
+    <div class="password-note">
+      <mat-icon color="primary">info</mat-icon>
+      <span>To change your <strong>Email</strong> or <strong>Password</strong>, you must provide your Current
+        Password.</span>
+    </div>
 
-  <mat-form-field appearance="fill">
-    <mat-label>New Password</mat-label>
-    <input matInput type="password" formControlName="newPassword" placeholder="Fill to change password">
-  </mat-form-field>
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>New Password</mat-label>
+      <input matInput type="password" formControlName="newPassword" placeholder="Leave blank to keep current">
+    </mat-form-field>
 
-  <mat-form-field appearance="fill">
-    <mat-label>Current Password</mat-label>
-    <input matInput type="password" formControlName="currentPassword">
-    <mat-error *ngIf="updateForm.controls['currentPassword'].hasError('required')">
-      Current Password is required for this change
-    </mat-error>
-  </mat-form-field>
-
-  <div *ngIf="errorMessage" class="error-message">
-    {{ errorMessage }}
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Current Password</mat-label>
+      <input matInput type="password" formControlName="currentPassword">
+      <mat-error *ngIf="updateForm.controls['currentPassword'].hasError('required')">
+        Current Password is required for this change
+      </mat-error>
+    </mat-form-field>
   </div>
-  <div *ngIf="successMessage" class="success-message">
-    {{ successMessage }}
+
+  <div *ngIf="errorMessage" class="message-box error-box">
+    <mat-icon>error_outline</mat-icon>
+    <span>{{ errorMessage }}</span>
+  </div>
+
+  <div *ngIf="successMessage" class="message-box success-box">
+    <mat-icon>check_circle</mat-icon>
+    <span>{{ successMessage }}</span>
   </div>
 
   <div class="form-actions" *ngIf="!isLoading">
-    <button mat-button type="button" (click)="onCancel()">Cancel</button>
-    <button mat-flat-button color="primary" type="submit" [disabled]="updateForm.pristine">
+    <button mat-button type="button" (click)="onCancel()" class="cancel-btn">Cancel</button>
+    <button mat-flat-button color="primary" type="submit" [disabled]="updateForm.pristine || updateForm.invalid"
+      class="save-btn">
       Save Changes
     </button>
   </div>
 
   <div *ngIf="isLoading" class="spinner-container">
-    <mat-spinner diameter="40"></mat-spinner>
-    <span>Updating...</span>
+    <mat-spinner diameter="30"></mat-spinner>
+    <span>Saving your updates...</span>
   </div>
+
 </form>

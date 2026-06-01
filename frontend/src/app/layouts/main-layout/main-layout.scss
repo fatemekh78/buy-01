@@ -1,0 +1,36 @@
+.sidenav-container {
+  height: 100vh;
+  /* Use our global background color so the whole app feels seamless */
+  background-color: var(--grey-light); 
+}
+
+.sidenav {
+  width: 260px; /* Slightly wider for better breathing room */
+  background-color: var(--white);
+  border-right: 1px solid var(--grey-border);
+}
+
+.sidenav-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.main-content {
+  flex: 1;
+  /* 🚨 FIX: Matches the 72px Navbar height we defined earlier! */
+  padding-top: 72px; 
+  
+  /* Allows content to scroll underneath the fixed navbar */
+  overflow-y: auto;
+  height: 100%;
+  box-sizing: border-box;
+
+  .content-wrapper {
+    /* Standardizes the maximum width of the app content so it looks great on huge monitors */
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px;
+    height: 100%;
+  }
+}

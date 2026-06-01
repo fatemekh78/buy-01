@@ -46,7 +46,7 @@ public class AuthController {
             @ApiResponse(responseCode = "409", description = "Email already exists")
     })
     public ResponseEntity<Map<String, String>> handleUserRegistration(
-            @Valid @RequestPart("user") RegisterUserDTO userDto,
+            @Valid @RequestPart("userDto") RegisterUserDTO userDto,
             @RequestPart(value = "avatarFile", required = false) MultipartFile avatarFile) {
         
         // DTO is passed directly to the service layer to be handled by MapStruct
@@ -73,7 +73,6 @@ public class AuthController {
         
         return ResponseEntity.ok(Map.of("message", "Login successful"));
     }
-
     @PostMapping("/logout")
     @Operation(summary = "Logout user", description = "Invalidates the user's active session by clearing the JWT cookie.")
     public ResponseEntity<Map<String, String>> handleUserLogout(HttpServletResponse response) {

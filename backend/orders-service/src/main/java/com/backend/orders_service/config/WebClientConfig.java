@@ -15,6 +15,9 @@ import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import reactor.netty.http.client.HttpClient;
 
+/**
+ * Configuration for internal service-to-service communication.
+ */
 @Configuration
 public class WebClientConfig {
 
@@ -27,6 +30,8 @@ public class WebClientConfig {
     @Bean
     @LoadBalanced
     public WebClient.Builder webClientBuilder() throws SSLException {
+        // Note: InsecureTrustManagerFactory is used to bypass SSL validation for 
+        // internal self-signed certificates between our Dockerized microservices.
         SslContext sslContext = SslContextBuilder.forClient()
                 .trustManager(InsecureTrustManagerFactory.INSTANCE)
                 .build();

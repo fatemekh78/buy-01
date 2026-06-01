@@ -7,17 +7,17 @@ import { CookieService } from 'ngx-cookie-service';
 })
 export class LoggedInGuard implements CanActivate {
 
-  constructor(private cookieService: CookieService, private router: Router) {}
+  constructor(private cookieService: CookieService, private router: Router) { }
 
   canActivate(): boolean {
     const isLoggedIn = this.cookieService.check('jwt');
 
     if (isLoggedIn) {
-      return true; // If logged in, allow access
+      return true;
     }
 
-    // If not logged in, redirect to login page
-    this.router.navigate(['/login']);
+    // 🚨 FIX 3: Updated to match your exact route definitions in app.routes.ts
+    this.router.navigate(['/auth/login']);
     return false;
   }
 }

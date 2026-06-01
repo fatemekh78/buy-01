@@ -1,43 +1,52 @@
 <mat-card *ngIf="product" class="product-card" (click)="onCardClick()">
 
   <div class="card-image-container">
-
-    <img
-      *ngFor="let imageUrl of product.imageUrls || []; let i = index"
-      mat-card-image
-      [src]="getImageUrl(imageUrl)"
-      [class.active]="i === currentImageIndex" alt="{{ product.name }} (image {{i + 1}})">
+    <img *ngFor="let imageUrl of product.imageUrls || []; let i = index" mat-card-image [src]="getImageUrl(imageUrl)"
+      [class.active]="i === currentImageIndex" alt="{{ product.name }} image {{ i + 1 }}">
 
     <div *ngIf="!product.imageUrls || product.imageUrls.length === 0" class="no-image-placeholder">
       <mat-icon>image_not_supported</mat-icon>
     </div>
   </div>
 
-  <mat-card-header>
-    <mat-card-title>{{ product.name }}</mat-card-title>
-    <mat-card-subtitle>{{ product.price | currency:'USD' }}</mat-card-subtitle>
-  </mat-card-header>
+  <mat-card-content class="card-content">
 
-  <mat-card-content>
+    <div class="header-row">
+      <h3 class="product-title" [title]="product.name">{{ product.name }}</h3>
+      <span class="product-price">{{ product.price | currency:'USD' }}</span>
+    </div>
+
     <p class="product-description">{{ product.description }}</p>
-    <p><strong>Quantity:</strong> {{ product.quantity }}</p>
+
+    <div class="stock-status" [class.low-stock]="product.quantity > 0 && product.quantity < 5">
+      <mat-icon class="sm-icon">inventory_2</mat-icon>
+      <span>{{ product.quantity }} in stock</span>
+    </div>
+
   </mat-card-content>
 
-  <mat-card-actions>
-    <ng-container *ngIf="product.createdByMe">
-      <button mat-button (click)="onEdit($event)">EDIT</button>
-      <button mat-button color="warn" (click)="onDelete($event)">DELETE</button>
-    </ng-container>
-    <ng-container *ngIf="!product.createdByMe && currentUserRole === 'CLIENT'">
-      <ng-container *ngIf="product.quantity > 0">
-        <button mat-button color="accent" (click)="onAddToCart($event)">
-          <mat-icon>add_shopping_cart</mat-icon>
-          ADD TO CART
-        </button>
-      </ng-container>
-      <ng-container *ngIf="product.quantity === 0">
-        <p class="out-of-stock-message">Out of Stock</p>
-      </ng-container>
-    </ng-container>
+  <mat-card-actions class="card-actions">
+
+    <div class="seller-actions" *ngIf="product.createdByMe">
+      <button mat-stroked-button class="edit-btn" (click)="onEdit($event)">
+        <mat-icon>edit</mat-icon> Edit
+      </button>
+      <button mat-icon-button class="delete-btn" (click)="onDelete($event)" matTooltip="Delete Product">
+        <mat-icon>delete_outline</mat-icon>
+      </button>
+    </div>
+
+    <div class="client-actions" *ngIf="!product.createdByMe && currentUserRole === 'CLIENT'">
+      <button *ngIf="product.quantity > 0" mat-flat-button class="add-to-cart-btn" (click)="onAddToCart($event)">
+        <mat-icon>add_shopping_cart</mat-icon>
+        <span>Add to Cart</span>
+      </button>
+
+      <div *ngIf="product.quantity === 0" class="out-of-stock-chip">
+        <mat-icon>remove_shopping_cart</mat-icon>
+        <span>Out of Stock</span>
+      </div>
+    </div>
+
   </mat-card-actions>
 </mat-card>

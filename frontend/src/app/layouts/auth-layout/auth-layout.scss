@@ -1,0 +1,11 @@
+.auth-layout-container {
+  min-height: 100vh;
+  width: 100%;
+  
+  /* Locks the background color to our global variable */
+  background-color: var(--grey-light); 
+  
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}

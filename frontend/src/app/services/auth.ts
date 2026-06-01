@@ -1,32 +1,32 @@
-// src/app/services/auth.service.ts
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { BehaviorSubject, Observable, throwError } from 'rxjs';
-import { tap, catchError } from 'rxjs/operators';
+import { tap, catchError, finalize } from 'rxjs/operators';
 import { User } from '../models/user.model';
 import { CookieService } from 'ngx-cookie-service';
+import { Router } from '@angular/router';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private authApiUrl = 'https://localhost:8443/api/auth';
-  private usersApiUrl = 'https://localhost:8443/api/users';
+  // 🚨 FIX 1: Use relative paths so Nginx can seamlessly proxy the requests!
+  private authApiUrl = '/api/auth';
+  private usersApiUrl = '/api/users';
 
   private currentUserSubject = new BehaviorSubject<User | null>(null);
   public readonly currentUser$ = this.currentUserSubject.asObservable();
 
-  /** true after the first call to /me (even if it fails) */
   private userLoaded = false;
 
   constructor(
     private http: HttpClient,
-    private cookieService: CookieService
+    private cookieService: CookieService,
+    private router: Router
   ) { }
 
-  // ADD THIS GETTER BACK
   public get currentUserRole(): string | null {
     return this.currentUserSubject.value?.role || null;
   }
-  /** Call this from an APP_INITIALIZER or a root guard */
+
   init(): Observable<User | null> {
     if (this.userLoaded) {
       return this.currentUser$;
@@ -44,7 +44,6 @@ export class AuthService {
     return this.http.post(`${this.authApiUrl}/login`, credentials, {
       withCredentials: true
     }).pipe(
-      // after a successful login we **must** reload the user
       tap(() => this.fetchCurrentUser().subscribe())
     );
   }
@@ -53,7 +52,6 @@ export class AuthService {
     return this.http.get<User>(`${this.usersApiUrl}/me`, { withCredentials: true }).pipe(
       tap(user => this.currentUserSubject.next(user)),
       catchError((err: HttpErrorResponse) => {
-        // 401 → not logged in → clear subject
         if (err.status === 401) {
           this.currentUserSubject.next(null);
         }
@@ -63,9 +61,15 @@ export class AuthService {
   }
 
   logout(): Observable<any> {
-    this.cookieService.delete('jwt');  // ✅ Delete cookie FIRST
-    return this.http.post(`${this.usersApiUrl}/logout`, {}, { withCredentials: true }).pipe(
-      tap(() => this.currentUserSubject.next(null))
+    // 🚨 FIX 2: Do NOT delete the cookie before the request, otherwise the interceptor 
+    // won't be able to attach the Bearer token for the logout endpoint!
+    return this.http.post(`${this.authApiUrl}/logout`, {}, { withCredentials: true }).pipe(
+      finalize(() => {
+        // Wipe the cookie after the request resolves (success or fail)
+        this.cookieService.delete('jwt', '/'); 
+        this.currentUserSubject.next(null);
+        this.router.navigate(['/auth/login']);
+      })
     );
   }
 

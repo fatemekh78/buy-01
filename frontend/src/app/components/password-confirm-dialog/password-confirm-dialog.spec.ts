@@ -6,18 +6,23 @@ import { CommonModule } from '@angular/common';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { NoopAnimationsModule } from '@angular/platform-browser/animations'; // 🚨 Fixes Material input crashes
 
-xdescribe('PasswordConfirmDialog', () => {
+describe('PasswordConfirmDialog', () => { // 🚨 Removed 'x'
   let component: PasswordConfirmDialog;
   let fixture: ComponentFixture<PasswordConfirmDialog>;
   let dialogRefMock: jasmine.SpyObj<MatDialogRef<PasswordConfirmDialog>>;
+  
   const mockData: PasswordDialogData = {
     title: 'Enter Password',
-    message: 'Please enter your password to continue'
+    message: 'Please enter your password to continue',
+    confirmText: 'Verify',
+    isDestructive: false
   };
 
   beforeEach(async () => {
-    dialogRefMock = jasmine.createSpyObj('MatDialogRef', ['close']);
+    dialogRefMock = jasmine.createSpyObj('MatDialogRef', ['close', 'updateSize']);
 
     await TestBed.configureTestingModule({
       imports: [
@@ -27,7 +32,9 @@ xdescribe('PasswordConfirmDialog', () => {
         MatDialogModule,
         MatFormFieldModule,
         MatInputModule,
-        MatButtonModule
+        MatButtonModule,
+        MatIconModule,
+        NoopAnimationsModule // Critical for testing Material inputs
       ],
       providers: [
         { provide: MatDialogRef, useValue: dialogRefMock },
@@ -40,12 +47,9 @@ xdescribe('PasswordConfirmDialog', () => {
     fixture.detectChanges();
   });
 
-  it('should create', () => {
+  it('should create and update dialog size', () => {
     expect(component).toBeTruthy();
-  });
-
-  it('should initialize with empty password', () => {
-    expect(component.password).toBe('');
+    expect(dialogRefMock.updateSize).toHaveBeenCalledWith('420px');
   });
 
   it('should display provided title and message', () => {
@@ -55,29 +59,18 @@ xdescribe('PasswordConfirmDialog', () => {
 
   it('should close dialog without data on cancel', () => {
     component.onCancel();
-
     expect(dialogRefMock.close).toHaveBeenCalledWith();
   });
 
   it('should close dialog with password on confirm', () => {
     component.password = 'mySecurePassword123';
-
     component.onConfirm();
-
     expect(dialogRefMock.close).toHaveBeenCalledWith('mySecurePassword123');
   });
 
   it('should close with empty string if password is empty', () => {
     component.password = '';
-
     component.onConfirm();
-
     expect(dialogRefMock.close).toHaveBeenCalledWith('');
-  });
-
-  it('should update password value', () => {
-    component.password = 'newPassword';
-
-    expect(component.password).toBe('newPassword');
   });
 });

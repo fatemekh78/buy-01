@@ -1,157 +1,203 @@
 package com.backend.user_service.controller;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doAnswer;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.test.context.support.WithMockUser;
-import org.springframework.security.web.AuthenticationEntryPoint;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.multipart.MultipartFile;
 
-import com.backend.common.config.filter.GatewayHeadersFilter;
 import com.backend.common.dto.InfoUserDTO;
 import com.backend.common.exception.CustomException;
-import com.backend.common.repository.SellerProfileRepository;
 import com.backend.user_service.dto.UpdateUserDTO;
-import com.backend.user_service.repository.UserRepository;
 import com.backend.user_service.service.UserService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.backend.user_service.service.UserService.UserUpdateResult;
 
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletRequest;
-import jakarta.servlet.ServletResponse;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletResponse;
 
-@WebMvcTest(UserController.class)
-// Add this to prevent the full application context from starting
-@MockBean({ UserRepository.class, SellerProfileRepository.class })
-@DisplayName("UserController Web Layer Tests")
+@ExtendWith(MockitoExtension.class)
+@DisplayName("UserController Unit Tests (Pure Mockito)")
 class UserControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
-    @MockBean
+    @Mock
     private UserService userService;
-    @Autowired
-    private ObjectMapper objectMapper;
 
-    @MockBean
-    private UserDetailsService userDetailsService;
+    @InjectMocks
+    private UserController userController;
 
-    @MockBean
-    private GatewayHeadersFilter gatewayHeadersFilter;
-
-    @MockBean
-    private AuthenticationEntryPoint customAuthEntryPoint;
+    private InfoUserDTO mockUser;
 
     @BeforeEach
-    void setUp() throws Exception {
-        // This tells the mocked filter to let the request pass through to the
-        // controller!
-        doAnswer(invocation -> {
-            ServletRequest request = invocation.getArgument(0);
-            ServletResponse response = invocation.getArgument(1);
-            FilterChain chain = invocation.getArgument(2);
-
-            chain.doFilter(request, response);
-            return null;
-        }).when(gatewayHeadersFilter).doFilter(any(), any(), any());
+    void setUp() {
+        mockUser = new InfoUserDTO();
+        mockUser.setEmail("test@example.com");
+        mockUser.setFirstName("John");
+        mockUser.setLastName("Doe");
     }
 
+    // ────────────────────────────────────────────────────────────────
+    // GET /me
+    // ────────────────────────────────────────────────────────────────
     @Test
-    @DisplayName("GET /me should return user details when header is present")
-    @WithMockUser(roles = "CLIENT")
-    void getMe_Success() throws Exception {
-        InfoUserDTO mockUser = new InfoUserDTO();
-        mockUser.setEmail("test@test.com");
-
+    @DisplayName("getMe - Should return user details successfully")
+    void getMe_Success() {
         when(userService.getUserById("user123")).thenReturn(mockUser);
 
-        mockMvc.perform(get("/api/users/me")
-                .header("X-User-ID", "user123"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.email").value("test@test.com"));
+        ResponseEntity<InfoUserDTO> response = userController.getMe("user123");
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("test@example.com", response.getBody().getEmail());
+        verify(userService).getUserById("user123");
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // PUT /me
+    // ────────────────────────────────────────────────────────────────
+    @Test
+    @DisplayName("updateMe - Success WITHOUT email change (No new cookie)")
+    void updateMe_NoEmailChange_Success() {
+        UpdateUserDTO updateDto = new UpdateUserDTO();
+        updateDto.setFirstName("Johnny");
+        
+        HttpServletResponse mockResponse = mock(HttpServletResponse.class);
+        UserUpdateResult mockResult = new UserUpdateResult(false, "test@example.com");
+
+        when(userService.updateUserInfo("user123", updateDto)).thenReturn(mockResult);
+
+        ResponseEntity<Map<String, String>> response = userController.updateMe(updateDto, "user123", mockResponse);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("Profile updated successfully", response.getBody().get("message"));
+        
+        // Verify no cookie was added since email didn't change
+        verifyNoInteractions(mockResponse); 
     }
 
     @Test
-    @DisplayName("PUT /me should return 400 when DTO is invalid")
-    @WithMockUser(roles = "CLIENT")
-    void updateMe_InvalidInput() throws Exception {
-        UpdateUserDTO invalidDto = new UpdateUserDTO();
-        invalidDto.setEmail("not-an-email"); // Trigger validation error
+    @DisplayName("updateMe - Success WITH email change (Generates new cookie)")
+    void updateMe_WithEmailChange_Success() {
+        UpdateUserDTO updateDto = new UpdateUserDTO();
+        updateDto.setEmail("new@example.com");
+        
+        HttpServletResponse mockResponse = mock(HttpServletResponse.class);
+        UserUpdateResult mockResult = new UserUpdateResult(true, "new@example.com");
+        Cookie mockCookie = new Cookie("jwt", "fake-token");
 
-        mockMvc.perform(put("/api/users/me")
-                .header("X-User-ID", "user123")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(invalidDto)))
-                .andExpect(status().isBadRequest());
+        when(userService.updateUserInfo("user123", updateDto)).thenReturn(mockResult);
+        when(userService.generateCookie("new@example.com")).thenReturn(mockCookie);
+
+        ResponseEntity<Map<String, String>> response = userController.updateMe(updateDto, "user123", mockResponse);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("Profile updated successfully", response.getBody().get("message"));
+        
+        // Verify the controller added the new cookie to the response
+        verify(mockResponse).addCookie(mockCookie);
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // DELETE /
+    // ────────────────────────────────────────────────────────────────
+    @Test
+    @DisplayName("deleteUser - Should return success message on valid deletion")
+    void deleteUser_Success() {
+        doNothing().when(userService).deleteUser("user123", "myPassword123");
+
+        ResponseEntity<Map<String, String>> response = userController.deleteUser("user123", "myPassword123");
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("User account deleted successfully", response.getBody().get("message"));
+        verify(userService).deleteUser("user123", "myPassword123");
     }
 
     @Test
-    @DisplayName("DELETE /avatar should be unauthorized without headers")
-    void deleteAvatar_Unauthorized() throws Exception {
-
-        // 1. Override the mocked filter just for this test to simulate a security block
-        doAnswer(invocation -> {
-            jakarta.servlet.http.HttpServletResponse response = invocation.getArgument(1);
-            response.setStatus(401); // Set the 401 Unauthorized status
-            return null; // CRITICAL: Do NOT call chain.doFilter(). We stop the request here.
-        }).when(gatewayHeadersFilter).doFilter(any(), any(), any());
-
-        // 2. Perform the test expecting the 401
-        mockMvc.perform(delete("/api/users/avatar"))
-                .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    @DisplayName("GET /email should be FORBIDDEN for non-ADMIN")
-    @WithMockUser(roles = "CLIENT")
-    void getUsersByEmail_ForbiddenForClient() throws Exception {
-        mockMvc.perform(get("/api/users/email")
-                .param("email", "admin@admin.com"))
-                .andExpect(status().isForbidden());
-    }
-
-    @Test
-    @DisplayName("GET /email should be allowed for ADMIN")
-    @WithMockUser(roles = "ADMIN")
-    void getUsersByEmail_SuccessForAdmin() throws Exception {
-        InfoUserDTO admin = new InfoUserDTO();
-        admin.setEmail("admin@admin.com");
-
-        when(userService.getUserByEmail("admin@admin.com")).thenReturn(admin);
-
-        mockMvc.perform(get("/api/users/email")
-                .param("email", "admin@admin.com"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.email").value("admin@admin.com"));
-    }
-
-    @Test
-    @DisplayName("DELETE / should handle service-level CustomException")
-    @WithMockUser(roles = "CLIENT")
-    void deleteUser_ServiceFailure() throws Exception {
+    @DisplayName("deleteUser - Should bubble up exception on invalid password")
+    void deleteUser_InvalidPassword_ThrowsException() {
         doThrow(new CustomException("Invalid password", HttpStatus.FORBIDDEN))
-                .when(userService).deleteUser(anyString(), anyString());
+                .when(userService).deleteUser("user123", "wrongPassword");
 
-        mockMvc.perform(delete("/api/users")
-                .header("X-User-ID", "user123")
-                .param("password", "wrong"))
-                .andExpect(status().isForbidden());
+        assertThrows(CustomException.class, () -> {
+            userController.deleteUser("user123", "wrongPassword");
+        });
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // DELETE /avatar
+    // ────────────────────────────────────────────────────────────────
+    @Test
+    @DisplayName("deleteAvatar - Should return success string")
+    void deleteAvatar_Success() {
+        doNothing().when(userService).deleteAvatar("user123");
+
+        ResponseEntity<String> response = userController.deleteAvatar("user123");
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("Avatar deleted successfully", response.getBody());
+        verify(userService).deleteAvatar("user123");
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // GET /seller
+    // ────────────────────────────────────────────────────────────────
+    @Test
+    @DisplayName("getSellerById - Should return seller details")
+    void getSellerById_Success() {
+        when(userService.getUserById("seller123")).thenReturn(mockUser);
+
+        ResponseEntity<InfoUserDTO> response = userController.getSellerById("seller123");
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("test@example.com", response.getBody().getEmail());
+        verify(userService).getUserById("seller123");
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // GET /email
+    // ────────────────────────────────────────────────────────────────
+    @Test
+    @DisplayName("getUsersByEmail - Should return user details")
+    void getUsersByEmail_Success() {
+        when(userService.getUserByEmail("test@example.com")).thenReturn(mockUser);
+
+        ResponseEntity<InfoUserDTO> response = userController.getUsersByEmail("test@example.com");
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("test@example.com", response.getBody().getEmail());
+        verify(userService).getUserByEmail("test@example.com");
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // POST /newAvatar
+    // ────────────────────────────────────────────────────────────────
+    @Test
+    @DisplayName("handleUserNewAvatar - Should accept file and return success map")
+    void handleUserNewAvatar_Success() {
+        MultipartFile mockFile = mock(MultipartFile.class);
+
+        doNothing().when(userService).updateUserAvatar(eq("user123"), any(MultipartFile.class));
+
+        ResponseEntity<Map<String, String>> response = userController.handleUserNewAvatar(mockFile, "user123");
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("Avatar updated successfully", response.getBody().get("message"));
+        verify(userService).updateUserAvatar("user123", mockFile);
     }
 }

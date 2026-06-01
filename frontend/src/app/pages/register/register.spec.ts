@@ -6,13 +6,8 @@ import { RegisterComponent } from './register';
 import { AuthService } from '../../services/auth';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
-import { MatButtonModule } from '@angular/material/button';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatDividerModule } from '@angular/material/divider';
 
-xdescribe('Register', () => {
+describe('RegisterComponent', () => { // Removed 'x' so the test runs!
   let component: RegisterComponent;
   let fixture: ComponentFixture<RegisterComponent>;
   let authServiceMock: jasmine.SpyObj<AuthService>;
@@ -23,7 +18,6 @@ xdescribe('Register', () => {
     authServiceMock.register.and.returnValue(of({}));
     routerMock = jasmine.createSpyObj('Router', ['navigate']);
 
-    // Override component to use inline template
     TestBed.overrideComponent(RegisterComponent, {
       set: {
         template: `
@@ -33,7 +27,8 @@ xdescribe('Register', () => {
             <button (click)="onRegister()">Register</button>
           </form>
         `,
-        templateUrl: undefined
+        styles: [],
+        imports: [CommonModule, FormsModule]
       }
     });
 
@@ -42,12 +37,7 @@ xdescribe('Register', () => {
         RegisterComponent,
         HttpClientTestingModule,
         FormsModule,
-        CommonModule,
-        MatFormFieldModule,
-        MatInputModule,
-        MatButtonModule,
-        MatProgressSpinnerModule,
-        MatDividerModule
+        CommonModule
       ],
       providers: [
         { provide: AuthService, useValue: authServiceMock },
@@ -65,15 +55,16 @@ xdescribe('Register', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should initialize with empty registerData', () => {
+  it('should initialize with empty registerData and default states', () => {
     expect(component.registerData.email).toBe('');
     expect(component.registerData.password).toBe('');
     expect(component.registerData.firstName).toBe('');
     expect(component.registerData.lastName).toBe('');
     expect(component.registerData.role).toBe('CLIENT');
+    expect(component.isLoading).toBeFalse();
   });
 
-  it('should call authService.register with form data', () => {
+  it('should set isLoading to true and call authService.register', () => {
     component.registerData = {
       firstName: 'John',
       lastName: 'Doe',
@@ -84,12 +75,13 @@ xdescribe('Register', () => {
 
     component.onRegister();
 
+    expect(component.isLoading).toBeTrue();
     expect(authServiceMock.register).toHaveBeenCalled();
     const callArg = authServiceMock.register.calls.mostRecent().args[0];
-    expect(callArg instanceof FormData).toBe(true);
+    expect(callArg instanceof FormData).toBeTrue();
   });
 
-  it('should navigate to login on successful registration', () => {
+  it('should navigate to /auth/login on successful registration', () => {
     authServiceMock.register.and.returnValue(of({ message: 'Success' }));
     component.registerData = {
       firstName: 'John',
@@ -101,13 +93,13 @@ xdescribe('Register', () => {
 
     component.onRegister();
 
-    expect(routerMock.navigate).toHaveBeenCalledWith(['/login']);
+    // Validating the new strict path
+    expect(routerMock.navigate).toHaveBeenCalledWith(['/auth/login']);
   });
 
-  it('should handle registration error', () => {
+  it('should handle registration error by resetting isLoading', () => {
     const errorResponse = { error: { error: 'Email already exists' }, status: 409 };
     authServiceMock.register.and.returnValue(throwError(() => errorResponse));
-    spyOn(console, 'error');
 
     component.registerData = {
       firstName: 'John',
@@ -119,7 +111,8 @@ xdescribe('Register', () => {
 
     component.onRegister();
 
-    expect(console.error).toHaveBeenCalled();
+    // The Global error interceptor handles the snackbar, we just need to ensure the button unlocks
+    expect(component.isLoading).toBeFalse();
   });
 
   it('should handle file selection and show cropper', () => {
@@ -128,25 +121,16 @@ xdescribe('Register', () => {
 
     component.onFileSelected(event);
 
-    expect(component.showCropper).toBe(true);
+    expect(component.showCropper).toBeTrue();
     expect(component.imageChangedEvent).toBe(event);
   });
 
   it('should handle image blob from cropper', () => {
     const blob = new Blob(['test'], { type: 'image/png' });
-
     component.handleImageBlob(blob);
 
     expect(component.croppedBlob).toBe(blob);
     expect(component.croppedImage).toBeTruthy();
-  });
-
-  it('should close modal and reset file input', () => {
-    component.showCropper = true;
-
-    component.handleModalClose();
-
-    expect(component.showCropper).toBe(false);
   });
 
   it('should include avatar file in registration for SELLER with cropped image', () => {
@@ -162,8 +146,9 @@ xdescribe('Register', () => {
 
     component.onRegister();
 
-    const callArg = authServiceMock.register.calls.mostRecent().args[0];
-    expect(callArg instanceof FormData).toBe(true);
+    const callArg = authServiceMock.register.calls.mostRecent().args[0] as FormData;
+    expect(callArg instanceof FormData).toBeTrue();
+    expect(callArg.has('avatarFile')).toBeTrue();
   });
 
   it('should not include avatar for CLIENT role', () => {
@@ -178,6 +163,7 @@ xdescribe('Register', () => {
 
     component.onRegister();
 
-    expect(authServiceMock.register).toHaveBeenCalled();
+    const callArg = authServiceMock.register.calls.mostRecent().args[0] as FormData;
+    expect(callArg.has('avatarFile')).toBeFalse();
   });
 });

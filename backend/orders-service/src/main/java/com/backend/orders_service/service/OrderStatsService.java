@@ -2,48 +2,48 @@ package com.backend.orders_service.service;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import com.backend.orders_service.model.Order;
+import com.backend.orders_service.model.OrderItem;
 import com.backend.orders_service.model.OrderStatus;
 import com.backend.orders_service.repository.OrderRepository;
-import com.fasterxml.jackson.databind.JsonNode;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Service for calculating user and seller statistics from orders
- * Only counts DELIVERED orders for accurate user statistics
- * Single-pass calculation: iterate through orders once to compute all stats
- * Calls product-service only when needed to fetch product details
+ * Service for calculating user and seller statistics from orders.
+ * Only counts DELIVERED orders for accurate user statistics.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class OrderStatsService {
 
     private final OrderRepository orderRepository;
     private final RestTemplate restTemplate;
-    private static final String PRODUCT_SERVICE_URL = "http://product-service"; // Eureka service discovery
-    private static final String PRICE_KEY = "price";
 
-    // Cache for product details
-    private Map<String, Map<String, Object>> productCache = new HashMap<>();
+    private static final String PRODUCT_SERVICE_URL = "http://product-service";
 
-    /**
-     * Calculate statistics for a specific user
-     * ONLY counts DELIVERED orders
-     * Returns: totalOrders, totalSpent, lastOrderDate, mostPurchasedProductId,
-     * mostPurchasedProductName, mostPurchasedProductCount, totalQuantityBought
-     */
+    // 🚨 FIX: Upgraded to Thread-Safe ConcurrentHashMap
+    private final Map<String, Map<String, Object>> productCache = new ConcurrentHashMap<>();
+
+    // ────────────────────────────────────────────────────────────────
+    // USER STATISTICS
+    // ────────────────────────────────────────────────────────────────
+
     public Map<String, Object> calculateUserStats(String userId) {
         try {
             List<Order> userOrders = orderRepository.findByUserIdAndStatusOrderByOrderDateDesc(userId,
@@ -54,7 +54,18 @@ public class OrderStatsService {
             }
 
             UserStatsAccumulator accumulator = new UserStatsAccumulator();
-            processUserOrders(userOrders, accumulator);
+
+            for (Order order : userOrders) {
+                accumulator.totalOrders++;
+                accumulator.updateLastOrderDate(order.getOrderDate());
+
+                if (order.getItems() != null) {
+                    for (OrderItem item : order.getItems()) {
+                        processUserOrderItem(item, accumulator);
+                    }
+                }
+            }
+
             return accumulator.toMap();
 
         } catch (Exception e) {
@@ -63,87 +74,38 @@ public class OrderStatsService {
         }
     }
 
-    private void processUserOrders(List<Order> orders, UserStatsAccumulator acc) {
-        for (Order order : orders) {
-            acc.totalOrders++;
-            acc.updateLastOrderDate(order.getOrderDate());
+    // 🚨 FIX: Replaced Reflection with direct object method calls
+    private void processUserOrderItem(OrderItem item, UserStatsAccumulator acc) {
+        String productId = item.getProductId();
+        int quantity = item.getQuantity() != null ? item.getQuantity() : 0;
 
-            if (order.getItems() != null) {
-                for (var item : order.getItems()) {
-                    processUserOrderItem(item, acc);
-                }
-            }
-        }
-    }
-
-    private void processUserOrderItem(Object item, UserStatsAccumulator acc) {
-        String productId = getItemProductId(item);
-        BigDecimal price = getItemPrice(item, productId);
-        int quantity = getItemQuantity(item);
+        // Use historical price if available, fallback to product service
+        BigDecimal price = item.getPrice() != null ? item.getPrice() : fetchItemPrice(productId);
 
         acc.totalSpent = acc.totalSpent.add(price.multiply(BigDecimal.valueOf(quantity)));
         acc.totalQuantityBought += quantity;
 
-        String productName = getItemProductName(item);
-        if (productName == null || productName.isEmpty()) {
+        String productName = item.getProductName();
+        if (productName == null || productName.isBlank()) {
             productName = getProductName(productId);
         }
 
         acc.trackProduct(productId, productName, quantity);
     }
 
-    private String getItemProductId(Object item) {
-        try {
-            java.lang.reflect.Method method = item.getClass().getMethod("getProductId");
-            return (String) method.invoke(item);
-        } catch (Exception e) {
-            return "";
-        }
-    }
-
-    private int getItemQuantity(Object item) {
-        try {
-            java.lang.reflect.Method method = item.getClass().getMethod("getQuantity");
-            return (int) method.invoke(item);
-        } catch (Exception e) {
-            return 0;
-        }
-    }
-
-    private String getItemProductName(Object item) {
-        try {
-            java.lang.reflect.Method method = item.getClass().getMethod("getProductName");
-            return (String) method.invoke(item);
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private String getItemSellerId(Object item) {
-        try {
-            java.lang.reflect.Method method = item.getClass().getMethod("getSellerId");
-            return (String) method.invoke(item);
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    /**
-     * Helper class to accumulate user statistics
-     */
     private static class UserStatsAccumulator {
         BigDecimal totalSpent = BigDecimal.ZERO;
         int totalOrders = 0;
         Instant lastOrderDate = null;
         int totalQuantityBought = 0;
+
         Map<String, Integer> productQuantityMap = new HashMap<>();
-        Map<String, String> productNameMap = new HashMap<>();
         String mostPurchasedProductId = null;
         String mostPurchasedProductName = null;
         int mostPurchasedQuantity = 0;
 
         void updateLastOrderDate(Instant orderDate) {
-            if (lastOrderDate == null || orderDate.isAfter(lastOrderDate)) {
+            if (lastOrderDate == null || (orderDate != null && orderDate.isAfter(lastOrderDate))) {
                 lastOrderDate = orderDate;
             }
         }
@@ -151,7 +113,6 @@ public class OrderStatsService {
         void trackProduct(String productId, String productName, int quantity) {
             int newQuantity = productQuantityMap.getOrDefault(productId, 0) + quantity;
             productQuantityMap.put(productId, newQuantity);
-            productNameMap.put(productId, productName);
 
             if (newQuantity > mostPurchasedQuantity) {
                 mostPurchasedQuantity = newQuantity;
@@ -173,32 +134,28 @@ public class OrderStatsService {
         }
     }
 
-    /**
-     * Calculate statistics for a specific seller
-     * Counts DELIVERED orders for revenue and metrics
-     * Also counts CANCELLED orders for tracking
-     * Returns: totalRevenue, totalItemsSold, totalOrders, totalCustomers,
-     * deliveredOrders,
-     * cancelledOrders, lastDeliveredDate
-     */
+    // ────────────────────────────────────────────────────────────────
+    // SELLER STATISTICS
+    // ────────────────────────────────────────────────────────────────
+
     public Map<String, Object> calculateSellerStats(String sellerId) {
         try {
             List<Order> allOrders = orderRepository.findAll();
 
             if (allOrders == null || allOrders.isEmpty()) {
-                log.warn("No orders found in database");
                 return initializeEmptySellerStats();
             }
 
-            log.info("Calculating stats for seller: {} from {} total orders", sellerId, allOrders.size());
-
             SellerStatsAccumulator acc = new SellerStatsAccumulator();
-            processSellerOrders(allOrders, sellerId, acc);
 
-            log.info(
-                    "Seller {} stats calculation - Checked {} items, matched {} items - Revenue: {}, Items: {}, Delivered Orders: {}, Cancelled Orders: {}, Customers: {}",
-                    sellerId, acc.itemsChecked, acc.itemsMatched, acc.totalRevenue, acc.totalItemsSold,
-                    acc.deliveredOrdersSet.size(), acc.cancelledOrdersSet.size(), acc.customersSet.size());
+            for (Order order : allOrders) {
+                if (order.getItems() == null || order.getItems().isEmpty())
+                    continue;
+
+                for (OrderItem item : order.getItems()) {
+                    processSellerOrderItem(item, order, sellerId, acc);
+                }
+            }
 
             return acc.toMap();
 
@@ -208,27 +165,13 @@ public class OrderStatsService {
         }
     }
 
-    private void processSellerOrders(List<Order> orders, String sellerId, SellerStatsAccumulator acc) {
-        for (Order order : orders) {
-            if (order.getItems() == null || order.getItems().isEmpty()) {
-                continue;
-            }
-            for (var item : order.getItems()) {
-                processSellerOrderItem(item, order, sellerId, acc);
-            }
-        }
-    }
-
-    private void processSellerOrderItem(Object item, Order order, String sellerId, SellerStatsAccumulator acc) {
+    private void processSellerOrderItem(OrderItem item, Order order, String targetSellerId,
+            SellerStatsAccumulator acc) {
         acc.itemsChecked++;
+
         String itemSellerId = resolveItemSellerId(item);
-        String productId = getItemProductId(item);
 
-        log.info("Item {} - productId: {}, sellerId: '{}', targetSellerId: '{}', status: {}, match: {}",
-                acc.itemsChecked, productId, itemSellerId, sellerId, order.getStatus(),
-                sellerId.equals(itemSellerId));
-
-        if (!sellerId.equals(itemSellerId)) {
+        if (!targetSellerId.equals(itemSellerId)) {
             return;
         }
 
@@ -236,48 +179,27 @@ public class OrderStatsService {
         OrderStatus status = order.getStatus();
 
         if (status == OrderStatus.DELIVERED) {
-            processDeliveredItem(item, order, acc);
+            BigDecimal price = item.getPrice() != null ? item.getPrice() : fetchItemPrice(item.getProductId());
+            int quantity = item.getQuantity() != null ? item.getQuantity() : 0;
+
+            acc.totalRevenue = acc.totalRevenue.add(price.multiply(BigDecimal.valueOf(quantity)));
+            acc.totalItemsSold += quantity;
+            acc.deliveredOrdersSet.add(order.getId());
+            acc.customersSet.add(order.getUserId());
+            acc.updateLastDeliveredDate(order.getOrderDate());
+
         } else if (status == OrderStatus.CANCELLED) {
             acc.cancelledOrdersSet.add(order.getId());
         }
     }
 
-    private String resolveItemSellerId(Object item) {
-        String itemSellerId = getItemSellerId(item);
-        String productId = getItemProductId(item);
-
-        if (itemSellerId == null || itemSellerId.isEmpty()) {
-            log.info("Item sellerId is EMPTY for productId: {}, fetching from product service", productId);
-            return getProductSellerId(productId);
+    private String resolveItemSellerId(OrderItem item) {
+        if (item.getSellerId() != null && !item.getSellerId().isBlank()) {
+            return item.getSellerId();
         }
-
-        log.info("Item has sellerId: {} for productId: {}, verifying from product service", itemSellerId, productId);
-        String productServiceSellerId = getProductSellerId(productId);
-        if (productServiceSellerId != null) {
-            log.info("Updated sellerId from product-service to: {}", productServiceSellerId);
-            return productServiceSellerId;
-        }
-        return itemSellerId;
+        return getProductSellerId(item.getProductId());
     }
 
-    private void processDeliveredItem(Object item, Order order, SellerStatsAccumulator acc) {
-        String productId = getItemProductId(item);
-        BigDecimal price = getItemPrice(item, productId);
-        int quantity = getItemQuantity(item);
-
-        acc.totalRevenue = acc.totalRevenue.add(price.multiply(BigDecimal.valueOf(quantity)));
-        acc.totalItemsSold += quantity;
-        acc.deliveredOrdersSet.add(order.getId());
-        acc.customersSet.add(order.getUserId());
-        acc.updateLastDeliveredDate(order.getOrderDate());
-
-        log.debug("Added item to seller stats - quantity: {}, price: {}, revenue increment: {}",
-                quantity, price, price.multiply(BigDecimal.valueOf(quantity)));
-    }
-
-    /**
-     * Helper class to accumulate seller statistics
-     */
     private static class SellerStatsAccumulator {
         BigDecimal totalRevenue = BigDecimal.ZERO;
         int totalItemsSold = 0;
@@ -289,7 +211,7 @@ public class OrderStatsService {
         int itemsMatched = 0;
 
         void updateLastDeliveredDate(Instant orderDate) {
-            if (lastDeliveredDate == null || orderDate.isAfter(lastDeliveredDate)) {
+            if (lastDeliveredDate == null || (orderDate != null && orderDate.isAfter(lastDeliveredDate))) {
                 lastDeliveredDate = orderDate;
             }
         }
@@ -298,16 +220,10 @@ public class OrderStatsService {
             Map<String, Object> stats = new HashMap<>();
             int totalOrders = deliveredOrdersSet.size() + cancelledOrdersSet.size();
 
-            // Both metrics as percentages for consistent display
-            double deliveryRatePercent = 100.0;
-            if (totalOrders > 0) {
-                deliveryRatePercent = (double) deliveredOrdersSet.size() / totalOrders * 100;
-            }
-
-            double cancellationRatePercent = 0.0;
-            if (totalOrders > 0) {
-                cancellationRatePercent = (double) cancelledOrdersSet.size() / totalOrders * 100;
-            }
+            double deliveryRatePercent = totalOrders > 0 ? ((double) deliveredOrdersSet.size() / totalOrders * 100)
+                    : 100.0;
+            double cancellationRatePercent = totalOrders > 0 ? ((double) cancelledOrdersSet.size() / totalOrders * 100)
+                    : 0.0;
 
             stats.put("totalRevenue", totalRevenue);
             stats.put("totalItemsSold", totalItemsSold);
@@ -321,139 +237,65 @@ public class OrderStatsService {
         }
     }
 
-    /**
-     * Fetch product price from cache or product service
-     * Uses cached data when available to avoid redundant API calls
-     */
-    private BigDecimal getItemPrice(Object item, String productId) {
-        try {
-            // Handle JsonNode or OrderItem using pattern matching
-            if (item instanceof JsonNode itemNode) {
-                if (itemNode.has(PRICE_KEY) && !itemNode.get(PRICE_KEY).isNull()) {
-                    return BigDecimal.valueOf(itemNode.get(PRICE_KEY).asDouble());
-                }
-            } else {
-                // Handle OrderItem - try to extract price
-                BigDecimal extractedPrice = extractPriceFromItem(item);
-                if (extractedPrice != null) {
-                    return extractedPrice;
-                }
-            }
+    // ────────────────────────────────────────────────────────────────
+    // PRODUCT SERVICE DELEGATES & CACHING
+    // ────────────────────────────────────────────────────────────────
 
-            // Fetch all product details at once (uses cache if available)
-            Map<String, Object> product = getProductDetails(productId);
-            if (product != null && product.containsKey(PRICE_KEY)) {
-                return new BigDecimal(product.get(PRICE_KEY).toString());
-            }
-        } catch (Exception e) {
-            log.warn("Could not fetch price for product {}", productId, e);
+    private BigDecimal fetchItemPrice(String productId) {
+        Map<String, Object> product = getProductDetails(productId);
+        if (product != null && product.containsKey("price")) {
+            return new BigDecimal(product.get("price").toString());
         }
         return BigDecimal.ZERO;
     }
 
-    /**
-     * Extract price from OrderItem object
-     */
-    private BigDecimal extractPriceFromItem(Object orderItem) {
-        try {
-            java.lang.reflect.Method getPriceMethod = orderItem.getClass().getMethod("getPrice");
-            Object price = getPriceMethod.invoke(orderItem);
-            if (price instanceof BigDecimal bd) {
-                return bd;
-            }
-            if (price != null) {
-                return new BigDecimal(price.toString());
-            }
-        } catch (Exception e) {
-            log.debug("Could not extract price from item: {}", e.getMessage());
-        }
-        return null;
-    }
-
-    /**
-     * Fetch seller ID from cache or product service
-     * Uses cached data to avoid redundant API calls
-     */
     private String getProductSellerId(String productId) {
-        try {
-            Map<String, Object> product = getProductDetails(productId);
-            log.info("getProductSellerId for productId: {} - received product map: {}", productId, product);
-            if (!product.isEmpty() && product.containsKey("sellerID")) {
-                String sellerID = product.get("sellerID").toString();
-                log.info("Found sellerID: {} for productId: {}", sellerID, productId);
-                return sellerID;
-            }
-            log.warn("sellerID key not found in product map for productId: {}", productId);
-        } catch (Exception e) {
-            log.warn("Could not fetch sellerID for product {}", productId, e);
+        Map<String, Object> product = getProductDetails(productId);
+        if (product != null && product.containsKey("sellerID")) {
+            return product.get("sellerID").toString();
         }
         return null;
     }
 
-    /**
-     * Fetch product name from cache or product service
-     * Uses cached data to avoid redundant API calls
-     */
     private String getProductName(String productId) {
-        try {
-            Map<String, Object> product = getProductDetails(productId);
-            if (!product.isEmpty() && product.containsKey("name")) {
-                return product.get("name").toString();
-            }
-        } catch (Exception e) {
-            log.warn("Could not fetch name for product {}", productId, e);
+        Map<String, Object> product = getProductDetails(productId);
+        if (product != null && product.containsKey("name")) {
+            return product.get("name").toString();
         }
         return "Unknown Product";
     }
 
     /**
-     * Fetch ALL product details at once from cache or product service
-     * This is a single API call per product that returns price, name, sellerId,
-     * etc.
-     * Significantly reduces API calls compared to fetching each field separately
-     * OPTIMIZATION: Instead of 3+ separate calls, this makes 1 call and caches
-     * result
+     * Fetch ALL product details at once from cache or product service.
+     * Uses computeIfAbsent for atomic, thread-safe cache population.
      */
-    @SuppressWarnings("unchecked")
     private Map<String, Object> getProductDetails(String productId) {
-        // Check cache first
-        if (productCache.containsKey(productId)) {
-            log.debug("Returning cached product for productId: {}", productId);
-            return productCache.get(productId);
-        }
+        if (productId == null)
+            return Collections.emptyMap();
 
-        try {
-            // Call the lightweight endpoint that returns only product DTO
-            String url = PRODUCT_SERVICE_URL + "/api/products/simple/" + productId;
-            log.info("Calling product-service URL: {}", url);
-
-            org.springframework.http.ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                    url,
-                    org.springframework.http.HttpMethod.GET,
-                    null,
-                    new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {
-                    });
-
-            Map<String, Object> product = response.getBody();
-
-            log.info("Product service response body: {}", product);
-
-            // Cache the result for future requests
-            if (product != null) {
-                productCache.put(productId, product);
-                log.debug("Cached product details for productId: {}", productId);
-                return product;
+        // 🚨 FIX: computeIfAbsent handles the cache checking and network fetching in
+        // one clean step
+        return productCache.computeIfAbsent(productId, id -> {
+            try {
+                String url = PRODUCT_SERVICE_URL + "/api/products/simple/" + id;
+                var response = restTemplate.exchange(
+                        url,
+                        HttpMethod.GET,
+                        null,
+                        new ParameterizedTypeReference<Map<String, Object>>() {
+                        });
+                return response.getBody() != null ? response.getBody() : Collections.emptyMap();
+            } catch (Exception e) {
+                log.warn("Could not fetch product details for productId: {} - Error: {}", id, e.getMessage());
+                return Collections.emptyMap();
             }
-        } catch (Exception e) {
-            log.warn("Could not fetch product details for productId: {} - Error: {}", productId, e.getMessage(), e);
-        }
-
-        return java.util.Collections.emptyMap();
+        });
     }
 
-    /**
-     * Initialize empty stats map
-     */
+    // ────────────────────────────────────────────────────────────────
+    // INITIALIZERS
+    // ────────────────────────────────────────────────────────────────
+
     private Map<String, Object> initializeEmptyStats() {
         Map<String, Object> stats = new HashMap<>();
         stats.put("totalOrders", 0);
@@ -466,9 +308,6 @@ public class OrderStatsService {
         return stats;
     }
 
-    /**
-     * Initialize empty seller stats map
-     */
     private Map<String, Object> initializeEmptySellerStats() {
         Map<String, Object> stats = new HashMap<>();
         stats.put("totalRevenue", BigDecimal.ZERO);
@@ -477,6 +316,8 @@ public class OrderStatsService {
         stats.put("totalCancelledOrders", 0);
         stats.put("totalUniqueCustomers", 0);
         stats.put("lastDeliveredDate", null);
+        stats.put("deliveryRate", 100.0);
+        stats.put("cancellationRate", 0.0);
         return stats;
     }
 }

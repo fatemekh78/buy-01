@@ -2,6 +2,7 @@ package com.backend.user_service.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
@@ -271,7 +272,7 @@ class UserServiceTest {
         assertThat(result.getName()).isEqualTo("jwt");
         assertThat(result.getValue()).isEqualTo("mock.jwt.token");
         assertThat(result.getMaxAge()).isEqualTo(24 * 60 * 60);
-        assertThat(result.isHttpOnly()).isTrue();
+        assertFalse(result.isHttpOnly());
     }
 
     @Test

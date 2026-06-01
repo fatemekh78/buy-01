@@ -1,49 +1,56 @@
-<mat-nav-list>
-  <a mat-list-item routerLink="/" (click)="closeSidenav.emit()">
-    <mat-icon matListItemIcon>home</mat-icon>
-    <span matListItemTitle>Home</span>
-  </a>
+<div class="sidenav-container">
+  <mat-nav-list class="custom-nav-list">
 
-  <a mat-list-item routerLink="/my-info" (click)="closeSidenav.emit()">
-    <mat-icon matListItemIcon>account_circle</mat-icon>
-    <span matListItemTitle>My Profile</span>
-  </a>
-
-  <a mat-list-item routerLink="/my-stats" (click)="closeSidenav.emit()">
-    <mat-icon matListItemIcon>bar_chart</mat-icon>
-    <span matListItemTitle>My Statistics</span>
-  </a>
-
-  <ng-container *ngIf="!isSeller()">
-    <a mat-list-item routerLink="/cart" (click)="closeSidenav.emit()">
-      <mat-icon matListItemIcon>shopping_cart</mat-icon>
-      <span matListItemTitle>Shopping Cart</span>
+    <a mat-list-item routerLink="/home" routerLinkActive="active-link" (click)="closeSidenav.emit()">
+      <mat-icon matListItemIcon>home</mat-icon>
+      <span matListItemTitle>Home</span>
     </a>
-    <a mat-list-item routerLink="/my-orders" (click)="closeSidenav.emit()">
-      <mat-icon matListItemIcon>receipt</mat-icon>
-      <span matListItemTitle>My Orders</span>
-    </a>
-  </ng-container>
 
-  <ng-container *ngIf="isSeller()">
-    <a mat-list-item routerLink="/my-products" (click)="closeSidenav.emit()">
-      <mat-icon matListItemIcon>inventory</mat-icon>
-      <span matListItemTitle>My Products</span>
+    <a mat-list-item routerLink="/my-info" routerLinkActive="active-link" (click)="closeSidenav.emit()">
+      <mat-icon matListItemIcon>account_circle</mat-icon>
+      <span matListItemTitle>My Profile</span>
     </a>
-    <a mat-list-item routerLink="/my-orders" (click)="closeSidenav.emit()">
-      <mat-icon matListItemIcon>receipt</mat-icon>
-      <span matListItemTitle>My Orders</span>
-    </a>
-    <a mat-list-item routerLink="/create-product" (click)="closeSidenav.emit()">
-      <mat-icon matListItemIcon>add_box</mat-icon>
-      <span matListItemTitle>Create a new product</span>
-    </a>
-  </ng-container>
 
-  <mat-divider></mat-divider>
+    <ng-container *ngIf="!isSeller()">
+      <a mat-list-item routerLink="/cart" routerLinkActive="active-link" (click)="closeSidenav.emit()">
+        <mat-icon matListItemIcon>shopping_cart</mat-icon>
+        <span matListItemTitle>Shopping Cart</span>
+      </a>
+      <a mat-list-item routerLink="/my-orders" routerLinkActive="active-link" (click)="closeSidenav.emit()">
+        <mat-icon matListItemIcon>receipt_long</mat-icon>
+        <span matListItemTitle>My Orders</span>
+      </a>
+      <a mat-list-item routerLink="/my-stats" routerLinkActive="active-link" (click)="closeSidenav.emit()">
+        <mat-icon matListItemIcon>bar_chart</mat-icon>
+        <span matListItemTitle>My Statistics</span>
+      </a>
+    </ng-container>
 
-  <a mat-list-item (click)="logout()">
-    <mat-icon matListItemIcon>logout</mat-icon>
-    <span matListItemTitle>Logout</span>
-  </a>
-</mat-nav-list>
+    <ng-container *ngIf="isSeller()">
+      <a mat-list-item routerLink="/my-products" routerLinkActive="active-link" (click)="closeSidenav.emit()">
+        <mat-icon matListItemIcon>inventory_2</mat-icon>
+        <span matListItemTitle>Manage Inventory</span>
+      </a>
+      <a mat-list-item routerLink="/create-product" routerLinkActive="active-link" (click)="closeSidenav.emit()">
+        <mat-icon matListItemIcon>add_circle_outline</mat-icon>
+        <span matListItemTitle>Add New Product</span>
+      </a>
+      <a mat-list-item routerLink="/my-orders" routerLinkActive="active-link" (click)="closeSidenav.emit()">
+        <mat-icon matListItemIcon>local_shipping</mat-icon>
+        <span matListItemTitle>Shop Orders</span>
+      </a>
+      <a mat-list-item routerLink="/my-stats" routerLinkActive="active-link" (click)="closeSidenav.emit()">
+        <mat-icon matListItemIcon>analytics</mat-icon>
+        <span matListItemTitle>Shop Analytics</span>
+      </a>
+    </ng-container>
+
+    <mat-divider class="nav-divider"></mat-divider>
+
+    <a mat-list-item (click)="logout()" class="logout-item">
+      <mat-icon matListItemIcon color="warn">logout</mat-icon>
+      <span matListItemTitle class="text-warn">Logout</span>
+    </a>
+
+  </mat-nav-list>
+</div>

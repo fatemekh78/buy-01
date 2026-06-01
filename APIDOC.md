@@ -11,6 +11,8 @@ Our platform utilizes **Springdoc OpenAPI** to provide live, interactive documen
     - 4.2 User Management API
     - 4.3 Seller Profile API
     - 4.4 Product Management API
+    - 4.5 Media API
+    - 4.6 Order Management API
 
 ---
 
@@ -33,6 +35,14 @@ Our platform utilizes **Springdoc OpenAPI** to provide live, interactive documen
 | `ProductSimpleDTO` | Lean schema specifically for internal service-to-service calls. | ✅ Validated |
 | `StockAdjustmentRequest`| Payload for inventory decrement/increment operations. | ✅ Validated |
 | `SellerOrderDTO` | Order details aggregated and optimized for seller dashboards. | ✅ Validated |
+| `OrderStatus` | Enum defining the lifecycle of an order (PENDING, PROCESSING, SHIPPING, SHIPPED, DELIVERED, CANCELLED). | ✅ Validated |
+| `PaymentMethod` | Enum defining payment types (CARD, PAY_ON_DELIVERY). | ✅ Validated |
+| `Order` | Core aggregate root representing a cart or completed purchase. | ✅ Validated |
+| `OrderItem` | Snapshot of a product at the time of purchase, including historical price and seller ID. | ✅ Validated |
+| `CreateOrderRequest`| Payload for initializing a new empty cart or cart with initial items. | ✅ Validated |
+| `CheckoutRequest` | Payload to finalize a pending cart and trigger payment/inventory deduction. | ✅ Validated |
+| `UpdateOrderStatusRequest`| Payload for admins to transition an order through its lifecycle. | ✅ Validated |
+| `RedoOrderResponse` | Returns a recreated cart and lists of products that were out of stock or partially filled. | ✅ Validated |
 
 ---
 
@@ -277,6 +287,90 @@ Payload for modifying existing product details. All fields are optional dependin
 
 ```
 
+### Order & OrderItem (Entity Representation)
+
+The core structure returned when fetching a client's cart or completed order.
+
+```json
+{
+  "id": "ord_998877",
+  "userId": "60d5ec49c54f4b238a4d2e9c",
+  "shippingAddress": "123 Nordic Way, Helsinki, Finland",
+  "status": "PENDING",
+  "paymentMethod": "CARD",
+  "orderDate": "2026-05-19T18:00:00Z",
+  "createdAt": "2026-05-19T17:45:00Z",
+  "updatedAt": "2026-05-19T18:00:00Z",
+  "isRemoved": false,
+  "items": [
+    {
+      "productId": "prod_8832",
+      "quantity": 2,
+      "price": 129.99,
+      "sellerId": "seller_4455",
+      "productName": "Mechanical Keyboard",
+      "imageUrl": "https://storage.../img.png"
+    }
+  ]
+}
+
+```
+
+### CheckoutRequest
+
+Payload to finalize a pending cart.
+
+```json
+{
+  "shippingAddress": "123 Nordic Way, Helsinki, Finland",
+  "paymentMethod": "CARD"
+}
+
+```
+
+### CreateOrderRequest
+
+Payload used to initialize a new cart.
+
+```json
+{
+  "userId": "60d5ec49c54f4b238a4d2e9c",
+  "shippingAddress": "123 Nordic Way, Helsinki, Finland",
+  "paymentMethod": "CARD",
+  "items": []
+}
+
+```
+
+### RedoOrderResponse
+
+Response payload when a user attempts to "re-order" a previous purchase.
+
+```json
+{
+  "order": { ... }, 
+  "message": "Some items could not be fully added to cart",
+  "outOfStockProducts": [
+    "'Wireless Mouse' is out of stock"
+  ],
+  "partiallyFilledProducts": [
+    "'Mechanical Keyboard' has only 1 available instead of 2"
+  ]
+}
+
+```
+
+### UpdateOrderStatusRequest
+
+Payload for an Admin transitioning an order state.
+
+```json
+{
+  "status": "SHIPPED"
+}
+
+```
+
 ---
 
 ## 4. API Endpoints
@@ -343,3 +437,45 @@ These endpoints handle specific internal logic, cross-service interactions, and 
 | **POST** | `/adjust-stock` | Decrements stock during order processing (Internal use). | No | INTERNAL | `List<StockAdjustmentRequest>` | `Void` (200 OK) |
 | **POST** | `/restock` | Increments stock upon order cancellation (Internal use). | No | INTERNAL | `List<StockAdjustmentRequest>` | `Void` (200 OK) |
 | **GET** | `/simple/{productId}` | Extremely lightweight fetch for `orders-service` verification. | No | INTERNAL | None | `ProductSimpleDTO` |
+
+
+### 4.5 Media API
+
+Endpoints dedicated to file uploads, static file serving, and direct media lifecycle management. These are handled by the `media-service`. 
+**Base path:** `/api/media`
+
+| Method | Endpoint | Description | Auth Required | Role Required | Request Payload | Response Type |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **POST** | `/upload` | Uploads a media file and links it to a product. | Yes | **SELLER / ADMIN** | `multipart/form-data` (`file`, `productId`) | `MediaUploadResponseDTO` |
+| **POST** | `/upload/avatar` | Uploads a profile avatar and returns the raw path. | Yes | ANY | `multipart/form-data` (`file`) | `String` (URL) |
+| **GET** | `/files/{filename}` | Serves a stored media file (image) to the client. | No | ANY (Public) | None | `Resource` (File Stream) |
+| **GET** | `/product/{productId}/urls` | Retrieves a limited list of image URLs (used for catalog previews). | No | ANY (Public) | Query Param (`limit`) | `List<String>` |
+| **GET** | `/batch` | Internal endpoint to fetch all media metadata for a specific product. | No | INTERNAL | Query Param (`productID`) | `List<MediaUploadResponseDTO>` |
+| **DELETE** | `/{id}` | Permanently removes a media asset and deletes its physical file. | Yes | **SELLER / ADMIN** | None | `String` |
+
+
+### 4.6 Order Management API
+
+Endpoints dedicated to shopping carts, checkout processing, order history, and multi-vendor order splitting. These are handled by the `orders-service`.
+**Base path:** `/api/orders`
+
+| Method | Endpoint | Description | Auth Required | Role Required | Request Payload | Response Type |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **POST** | `/` | Initializes a new order (cart). | Yes | ANY | `CreateOrderRequest` | `Order` |
+| **POST** | `/{orderId}/checkout` | Finalizes a pending cart, verifies payment, and deducts inventory. | Yes | **CLIENT** | `CheckoutRequest` | `Order` |
+| **GET** | `/{orderId}` | Retrieves order details. *Note: Sellers only see their specific items from the order.* | Yes | ANY | None | `Order` or `SellerOrderDTO` |
+| **GET** | `/user/{userId}` | Fetches paginated order history with dynamic filtering (price, dates, status). | Yes | **CLIENT / SELLER** | Query Params | `Page<Order>` or `Page<SellerOrderDTO>` |
+| **GET** | `/user/{userId}/cart` | Retrieves the user's active (PENDING) cart. | Yes | **CLIENT** | None | `Order` |
+| **POST** | `/{orderId}/items` | Adds a new product to an existing pending cart. | Yes | **CLIENT** | `OrderItem` | `Order` |
+| **PUT** | `/{orderId}/items/{productId}` | Modifies the quantity of a product currently in the cart. | Yes | **CLIENT** | `OrderItem` | `Order` |
+| **DELETE** | `/{orderId}/items/{productId}` | Deletes a specific product from a pending cart. | Yes | **CLIENT** | None | `Order` |
+| **DELETE** | `/{orderId}/items` | Clears all items from a pending cart. | Yes | **CLIENT** | None | `Order` |
+| **POST** | `/{orderId}/redo` | Recreates a previous order based on current stock availability. | Yes | **CLIENT** | None | `RedoOrderResponse` |
+| **DELETE** | `/{orderId}` | Cancels an order (must be in SHIPPING state) and restores stock. | Yes | **CLIENT / ADMIN** | None | `Map<String, String>` |
+| **PUT** | `/{orderId}/remove` | Soft deletes a completed/cancelled order from user history. | Yes | **CLIENT / ADMIN** | None | `Map<String, String>` |
+| **PUT** | `/{orderId}/status` | Transitions an order to a new lifecycle state. | Yes | **ADMIN** | `UpdateOrderStatusRequest` | `Order` |
+| **GET** | `/user/{userId}/stats` | Calculates total orders, amount spent, and top products for a user. | Yes | ANY | None | `Map<String, Object>` |
+| **GET** | `/seller/{sellerId}/stats`| Calculates total revenue, sales, and customers for a seller. | Yes | **SELLER** | None | `Map<String, Object>` |
+| **GET** | `/all` | Fetches all orders in the system for administrative calculation. | Yes | **ADMIN / INTERNAL** | None | `List<Order>` |
+
+```

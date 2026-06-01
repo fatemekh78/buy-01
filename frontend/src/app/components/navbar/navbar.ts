@@ -3,9 +3,9 @@ import { CommonModule } from '@angular/common';
 import { Router, RouterModule } from '@angular/router';
 import { Observable, Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { User } from '../../models/user.model'; // Adjust path if needed
-import { AuthService } from '../../services/auth'; // Adjust path if needed
-import { OrderService } from '../../services/order.service';
+import { User } from '../../models/user.model';
+import { AuthService } from '../../services/auth';
+import { OrderService } from '../../services/order.service'; // Note: Ensure the file name matches your actual file
 
 // Import Angular Material modules
 import { MatToolbarModule } from '@angular/material/toolbar';
@@ -13,6 +13,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatBadgeModule } from '@angular/material/badge';
+import { MatDividerModule } from '@angular/material/divider';
 
 @Component({
   selector: 'app-navbar',
@@ -24,35 +25,37 @@ import { MatBadgeModule } from '@angular/material/badge';
     MatIconModule,
     MatButtonModule,
     MatMenuModule,
-    MatBadgeModule
+    MatBadgeModule,
+    MatDividerModule
   ],
   templateUrl: './navbar.html',
-  styleUrls: ['./navbar.css']
+  styleUrls: ['./navbar.scss'] // Updated to SCSS
 })
 export class Navbar implements OnInit, OnDestroy {
   @Output() toggleSidenav = new EventEmitter<void>();
+
   public currentUser$: Observable<User | null>;
   public cartItemCount$: Observable<number>;
   private destroy$ = new Subject<void>();
 
-  constructor(private authService: AuthService, private router: Router, private orderService: OrderService) {
+  constructor(
+    private authService: AuthService,
+    private router: Router,
+    private orderService: OrderService
+  ) {
     this.currentUser$ = this.authService.currentUser$;
     this.cartItemCount$ = this.orderService.cartItemCount$;
   }
 
   ngOnInit() {
-    // Load cart when user is available (only for clients, not sellers)
-    this.currentUser$.pipe(
-      takeUntil(this.destroy$)
-    ).subscribe(user => {
+    this.currentUser$.pipe(takeUntil(this.destroy$)).subscribe(user => {
       if (user && user.id && user.role === 'CLIENT') {
-        console.log('[Navbar] Loading cart for user:', user.id);
         this.orderService.loadCart(user.id).pipe(
           takeUntil(this.destroy$)
-        ).subscribe(
-          (cart) => console.log('[Navbar] Cart loaded:', cart),
-          (error) => console.error('[Navbar] Error loading cart:', error)
-        );
+        ).subscribe({
+          next: () => console.log('[Navbar] Cart synchronized.'),
+          error: (error) => console.error('[Navbar] Error loading cart:', error)
+        });
       }
     });
   }
@@ -62,15 +65,16 @@ export class Navbar implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
-  // Helper to build the full URL for the avatar
+  // 🚨 FIX: Removed hardcoded localhost. Use relative paths so Nginx can proxy!
   getAvatarUrl(avatarPath: string): string {
-    // Prepends the gateway URL to the path stored in the database
-    return `https://localhost:8443${avatarPath}`;
+    if (!avatarPath) return '';
+    return avatarPath.startsWith('/') ? avatarPath : `/${avatarPath}`;
   }
 
   onLogout() {
     this.authService.logout().subscribe(() => {
-      this.router.navigate(['/login']);
+      // 🚨 FIX: Strict routing to match app.routes.ts
+      this.router.navigate(['/auth/login']);
     });
   }
 }

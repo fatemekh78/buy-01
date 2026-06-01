@@ -1,6 +1,12 @@
 <div class="cropper-modal-overlay">
   <div class="cropper-modal-content">
-    <h3>Crop Your Image</h3>
+    
+    <div class="modal-header">
+      <h3>
+        <mat-icon color="primary">crop</mat-icon>
+        Adjust Avatar
+      </h3>
+    </div>
 
     <div class="cropper-wrapper">
       <image-cropper
@@ -16,13 +22,16 @@
     </div>
 
     <div class="preview-container" *ngIf="croppedImage">
-      <p>Preview:</p>
-      <img [src]="croppedImage" alt="Cropped image preview" />
+      <p class="preview-label">Preview</p>
+      <img [src]="croppedImage" alt="Cropped image preview" class="avatar-preview" />
     </div>
 
     <div class="cropper-buttons">
-      <button type="button" (click)="cancelCrop()" class="cancel-btn">Cancel</button>
-      <button type="button" (click)="saveCrop()" class="save-btn" [disabled]="!croppedBlob">Save</button>
+      <button mat-button (click)="cancelCrop()" class="cancel-btn">Cancel</button>
+      <button mat-flat-button color="primary" (click)="saveCrop()" [disabled]="!croppedBlob" class="save-btn">
+        <mat-icon>check</mat-icon> Save
+      </button>
     </div>
+
   </div>
 </div>
