@@ -1536,7 +1536,7 @@ For detailed troubleshooting guides and solutions to common issues, see [TROUBLE
 
 ---
 
-## 🎯 Next Steps
+## 🎯 Next Steps: 
 
 1. **Follow the Quick Start** to get the application running
 2. **Access the Frontend** at https://localhost:4200
