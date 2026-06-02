@@ -1,5 +1,6 @@
 <div class="checkout-wrapper">
-  <div class="alerts">
+  
+  <div class="alerts" *ngIf="errorMessage || successMessage">
     <div class="alert error" *ngIf="errorMessage">
       <mat-icon>error_outline</mat-icon>
       <span>{{ errorMessage }}</span>
@@ -12,22 +13,27 @@
 
   <ng-container *ngIf="hasItems; else emptyCart">
     <div class="checkout-container">
+      <h1 class="page-title">Secure Checkout</h1>
+      
       <div class="checkout-grid">
+        
         <mat-card class="details-card">
           <mat-card-header>
+            <mat-icon mat-card-avatar color="primary">local_shipping</mat-icon>
             <mat-card-title>Delivery & Payment</mat-card-title>
             <mat-card-subtitle>Provide where we should ship your order and pick a payment method.</mat-card-subtitle>
           </mat-card-header>
 
-          <mat-card-content>
+          <mat-card-content class="card-body">
             <form [formGroup]="checkoutForm" (ngSubmit)="onSubmit()" class="checkout-form">
+              
               <mat-form-field appearance="outline">
                 <mat-label>Shipping Address</mat-label>
                 <textarea
                   matInput
                   rows="4"
                   formControlName="shippingAddress"
-                  placeholder="Street, city, state, ZIP"
+                  placeholder="e.g. 123 Main St, City, State, ZIP"
                   [disabled]="isProcessing"
                 ></textarea>
                 <mat-error *ngIf="checkoutForm.get('shippingAddress')?.hasError('required')">
@@ -50,46 +56,51 @@
                 </mat-error>
               </mat-form-field>
 
-              <button mat-raised-button color="primary" type="submit" [disabled]="checkoutForm.invalid || isProcessing">
-                <span>Complete Checkout</span>
-                <mat-progress-spinner
-                  *ngIf="isProcessing"
-                  diameter="18"
-                  mode="indeterminate"
-                ></mat-progress-spinner>
-              </button>
-              <button mat-button type="button" color="accent" routerLink="/cart" [disabled]="isProcessing">
-                Back to Cart
-              </button>
+              <div class="form-actions">
+                <button mat-button type="button" routerLink="/cart" [disabled]="isProcessing" class="back-btn">
+                  Back to Cart
+                </button>
+                <button mat-flat-button color="primary" type="submit" [disabled]="checkoutForm.invalid || isProcessing" class="submit-btn">
+                  <span *ngIf="!isProcessing">Place Order</span>
+                  <span *ngIf="isProcessing">Processing...</span>
+                  <mat-progress-spinner *ngIf="isProcessing" diameter="20" mode="indeterminate"></mat-progress-spinner>
+                </button>
+              </div>
+
             </form>
           </mat-card-content>
         </mat-card>
 
-        <mat-card class="summary-card">
-          <mat-card-header>
-            <mat-card-title>Order Summary</mat-card-title>
-            <mat-card-subtitle>Review items and totals before placing the order.</mat-card-subtitle>
-          </mat-card-header>
+        <aside class="summary-sidebar">
+          <mat-card class="summary-card">
+            <mat-card-header>
+              <mat-icon mat-card-avatar color="primary">receipt</mat-icon>
+              <mat-card-title>Order Summary</mat-card-title>
+              <mat-card-subtitle>Review items before placing order.</mat-card-subtitle>
+            </mat-card-header>
 
-          <mat-card-content>
-            <mat-list>
-              <mat-list-item *ngFor="let item of cart?.items">
-                <div matListItemAvatar class="product-avatar">
-                  <mat-icon>inventory_2</mat-icon>
-                </div>
-                <div matListItemTitle>{{ getProductName(item.productId) }}</div>
-                <div matListItemLine>{{ item.quantity }} × {{ productDetails[item.productId]?.price | currency:'USD' }}</div>
-                <div matListItemMeta>{{ getItemSubtotal(item) | currency:'USD' }}</div>
-              </mat-list-item>
-            </mat-list>
+            <mat-card-content class="card-body">
+              <mat-list class="dense-list">
+                <mat-list-item *ngFor="let item of cart?.items">
+                  <div matListItemAvatar class="product-avatar">
+                    <mat-icon>inventory_2</mat-icon>
+                  </div>
+                  <div matListItemTitle class="item-title">{{ getProductName(item.productId) }}</div>
+                  <div matListItemLine class="item-meta">{{ item.quantity }} × {{ productDetails[item.productId]?.price | currency:'USD' }}</div>
+                  <div matListItemMeta class="item-subtotal">{{ getItemSubtotal(item) | currency:'USD' }}</div>
+                </mat-list-item>
+              </mat-list>
 
-            <mat-divider></mat-divider>
-            <div class="total-row">
-              <span>Total</span>
-              <span>{{ cartTotal | currency:'USD' }}</span>
-            </div>
-          </mat-card-content>
-        </mat-card>
+              <mat-divider class="divider"></mat-divider>
+              
+              <div class="total-row">
+                <span>Total Amount</span>
+                <span class="total-amount">{{ cartTotal | currency:'USD' }}</span>
+              </div>
+            </mat-card-content>
+          </mat-card>
+        </aside>
+
       </div>
     </div>
   </ng-container>
@@ -97,9 +108,9 @@
 
 <ng-template #emptyCart>
   <div class="empty-state">
-    <mat-icon>shopping_cart</mat-icon>
+    <mat-icon class="empty-icon">remove_shopping_cart</mat-icon>
     <h2>Your cart is empty</h2>
     <p>Add products to your cart before checking out.</p>
-    <button mat-raised-button color="primary" routerLink="/home">Browse Products</button>
+    <button mat-flat-button color="primary" routerLink="/home" class="browse-btn">Browse Products</button>
   </div>
 </ng-template>

@@ -1,26 +1,44 @@
-<div class="product-page-container">
-  <h2>My Products</h2>
+<div class="my-products-container">
+  
+  <div class="page-header">
+    <div class="header-left">
+      <h1>My Products</h1>
+      <p>Manage your inventory, update details, or list new items.</p>
+    </div>
+    <div class="header-actions">
+      <button mat-flat-button color="primary" routerLink="/create-product">
+        <mat-icon>add</mat-icon> Add New Product
+      </button>
+    </div>
+  </div>
 
   <div class="product-grid" *ngIf="products.length > 0; else noProducts">
-
     <app-product-card
       *ngFor="let product of products"
       [product]="product"
       (edit)="onProductUpdated()"
       (delete)="onProductDeleted()">
     </app-product-card>
-
   </div>
 
   <ng-template #noProducts>
-    <p>You haven't created any products yet.</p>
+    <div class="empty-state">
+      <mat-icon>inventory_2</mat-icon>
+      <h3>No Products Listed</h3>
+      <p>You haven't created any products yet. Start selling today!</p>
+      <button mat-flat-button color="primary" routerLink="/create-product">
+        Create First Product
+      </button>
+    </div>
   </ng-template>
 
-  <mat-paginator
-    [length]="totalElements"
-    [pageSize]="pageSize"
-    [pageSizeOptions]="[5, 10, 20]"
-    (page)="onPageChange($event)">
-  </mat-paginator>
+  <div class="paginator-wrapper" *ngIf="totalElements > 0">
+    <mat-paginator
+      [length]="totalElements"
+      [pageSize]="pageSize"
+      [pageSizeOptions]="[5, 10, 20]"
+      (page)="onPageChange($event)">
+    </mat-paginator>
+  </div>
 
 </div>

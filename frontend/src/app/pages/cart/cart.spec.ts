@@ -15,7 +15,7 @@ describe('Cart', () => {
   beforeEach(async () => {
     orderServiceMock = jasmine.createSpyObj('OrderService', ['loadCart', 'removeItemFromOrder', 'clearCartItems', 'updateOrderItem']);
     orderServiceMock.cart$ = new BehaviorSubject(null);
-    
+
     const authServiceMock = jasmine.createSpyObj('AuthService', [], { currentUser$: of({ id: '1', role: 'CLIENT' }) });
     const routerMock = jasmine.createSpyObj('Router', ['navigate']);
 

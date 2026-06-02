@@ -27,7 +27,6 @@ import { OrderService } from '../../services/order.service';
     MatIconModule,
     CurrencyPipe,
     MatDialogModule,
-    EditProductModal
   ],
   templateUrl: './product-card.html',
   styleUrls: ['./product-card.scss'] // Updated to SCSS

@@ -6,6 +6,8 @@ import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatDividerModule } from '@angular/material/divider';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { forkJoin } from 'rxjs';
 import { Order, OrderItem } from '../../models/order.model';
@@ -14,12 +16,13 @@ import { AuthService } from '../../services/auth';
 import { ProductService } from '../../services/product-service';
 import { ProductDetailDTO } from '../../models/product.model';
 
+
 @Component({
     selector: 'app-cart',
     standalone: true,
     imports: [
         CommonModule, FormsModule, RouterLink, MatCardModule, 
-        MatButtonModule, MatIconModule, MatInputModule, MatFormFieldModule
+        MatButtonModule, MatIconModule, MatInputModule, MatFormFieldModule, MatProgressSpinnerModule, MatDividerModule
     ],
     templateUrl: './cart.html',
     styleUrls: ['./cart.scss']

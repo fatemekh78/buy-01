@@ -36,7 +36,7 @@ import { AuthService } from '../../services/auth';
         MatProgressSpinnerModule
     ],
     templateUrl: './checkout.html',
-    styleUrls: ['./checkout.css']
+    styleUrls: ['./checkout.scss'] // Updated to SCSS
 })
 export class Checkout implements OnInit, OnDestroy {
     checkoutForm: FormGroup;
@@ -98,9 +98,7 @@ export class Checkout implements OnInit, OnDestroy {
     }
 
     get cartTotal(): number {
-        if (!this.cart) {
-            return 0;
-        }
+        if (!this.cart) return 0;
         return this.cart.items.reduce((total, item) => total + this.getItemSubtotal(item), 0);
     }
 
@@ -119,10 +117,9 @@ export class Checkout implements OnInit, OnDestroy {
         this.isProcessing = true;
         const request = this.checkoutForm.value as CheckoutRequest;
         this.orderService.checkoutOrder(this.cart.id, request).subscribe({
-            next: (order) => {
+            next: () => {
                 this.isProcessing = false;
                 this.successMessage = 'Checkout successful! Cart cleared. Redirecting to order history...';
-                // Clear the cart from local state
                 this.orderService.clearCart();
                 setTimeout(() => this.router.navigate(['/my-orders']), 1500);
             },
@@ -130,18 +127,12 @@ export class Checkout implements OnInit, OnDestroy {
                 this.isProcessing = false;
                 this.successMessage = null;
 
-                // Extract error message from various response formats
                 let errorMsg = 'Checkout failed due to an unexpected error. Please retry.';
 
                 if (err.status === 400) {
-                    // Try to get message from different response formats
-                    if (err.error?.message) {
-                        errorMsg = err.error.message;
-                    } else if (err.error?.error) {
-                        errorMsg = err.error.error;
-                    } else if (typeof err.error === 'string') {
-                        errorMsg = err.error;
-                    }
+                    if (err.error?.message) errorMsg = err.error.message;
+                    else if (err.error?.error) errorMsg = err.error.error;
+                    else if (typeof err.error === 'string') errorMsg = err.error;
                 } else if (err.status === 0) {
                     errorMsg = 'Unable to connect to server. Please check your internet connection.';
                 } else {
@@ -166,16 +157,11 @@ export class Checkout implements OnInit, OnDestroy {
     }
 
     private ensureCartLoaded(): void {
-        if (!this.userId || this.hasItems) {
-            return;
-        }
+        if (!this.userId || this.hasItems) return;
+
         const loadSub = this.orderService.loadCart(this.userId).subscribe({
-            next: () => {
-                // cart observable will emit via cart subscription
-            },
-            error: () => {
-                this.errorMessage = 'Unable to load your cart. Please refresh and try again.';
-            }
+            next: () => { },
+            error: () => this.errorMessage = 'Unable to load your cart. Please refresh and try again.'
         });
         this.subscriptions.add(loadSub);
     }
@@ -184,17 +170,13 @@ export class Checkout implements OnInit, OnDestroy {
         const uniqueIds = Array.from(new Set(items.map(item => item.productId)));
         const idsToFetch = uniqueIds.filter(id => !this.productDetails[id]);
 
-        if (idsToFetch.length === 0) {
-            return;
-        }
+        if (idsToFetch.length === 0) return;
 
         forkJoin(idsToFetch.map(id => this.productService.getProductById(id))).subscribe({
             next: (products) => {
                 products.forEach(product => {
                     const key = product.productId || product.id;
-                    if (key) {
-                        this.productDetails[key] = product;
-                    }
+                    if (key) this.productDetails[key] = product;
                 });
             },
             error: () => {

@@ -1,21 +1,30 @@
 <div class="product-detail-container">
 
-  <div *ngIf="isLoading" class="spinner-container">
-    <mat-spinner></mat-spinner>
+  <div class="page-actions" *ngIf="!isLoading && !errorMessage">
+    <button mat-button class="back-btn" (click)="router.navigate(['/home'])">
+      <mat-icon>arrow_back</mat-icon> Back to Shop
+    </button>
   </div>
 
-  <div *ngIf="errorMessage" class="error-container">
+  <div *ngIf="isLoading" class="loading-state">
+    <mat-spinner diameter="50"></mat-spinner>
+    <p>Loading product details...</p>
+  </div>
+
+  <div *ngIf="errorMessage" class="error-state">
+    <mat-icon>error_outline</mat-icon>
+    <h3>Product Unavailable</h3>
     <p>{{ errorMessage }}</p>
-    <a routerLink="/home">Go back home</a>
+    <button mat-flat-button color="primary" routerLink="/home">Return to Home</button>
   </div>
 
-  <div *ngIf="product" class="product-content-grid">
+  <div *ngIf="product && !isLoading" class="product-content-grid">
 
     <div class="product-gallery">
       <div class="main-image-container">
-        <img *ngIf="selectedImageUrl" [src]="selectedImageUrl" alt="{{ product.name }}">
+        <img *ngIf="selectedImageUrl" [src]="selectedImageUrl" [alt]="product.name">
         <div *ngIf="!selectedImageUrl" class="no-image-placeholder">
-          <mat-icon>image_not_supported</mat-icon>
+          <mat-icon>inventory_2</mat-icon>
         </div>
       </div>
 
@@ -28,47 +37,57 @@
       </div>
     </div>
 
-    <div class="product-info">
-      <h1>{{ product.name }}</h1>
+    <div class="product-info-wrapper">
+      <div class="info-card">
+        
+        <h1 class="product-title">{{ product.name }}</h1>
+        <div class="product-price">{{ product.price | currency:'USD' }}</div>
 
-      <div class="price">{{ product.price | currency:'USD' }}</div>
+        <div class="seller-badge">
+          <mat-icon>storefront</mat-icon>
+          <div class="seller-text">
+            <span class="sold-by">Sold by</span>
+            <span class="seller-name">{{ product.sellerFirstName }} {{ product.sellerLastName }}</span>
+          </div>
+        </div>
 
-      <div class="quantity">
-        <strong>Quantity Available:</strong> {{ product.quantity }}
+        <div class="stock-status">
+          <span class="status-indicator" [class.in-stock]="product.quantity > 0" [class.out-of-stock]="product.quantity === 0"></span>
+          <span *ngIf="product.quantity > 0"><strong>{{ product.quantity }}</strong> units available</span>
+          <span *ngIf="product.quantity === 0" class="out-of-stock-text">Currently Out of Stock</span>
+        </div>
+
+        <div class="description-section">
+          <h3>About this item</h3>
+          <p>{{ product.description }}</p>
+        </div>
+
+        <div class="buy-actions" *ngIf="canAddToCart() && product.quantity > 0">
+          <button mat-flat-button color="primary" class="add-to-cart-btn" (click)="onAddToCart()">
+            <mat-icon>shopping_cart</mat-icon> Add to Cart
+          </button>
+        </div>
+
+        <div class="out-of-stock-alert" *ngIf="product.quantity === 0">
+          <mat-icon>warning_amber</mat-icon>
+          This item is currently out of stock and cannot be purchased.
+        </div>
+
+        <div class="seller-actions" *ngIf="product.createdByMe">
+          <div class="seller-actions-header">
+            <mat-icon>admin_panel_settings</mat-icon> Seller Controls
+          </div>
+          <div class="action-buttons">
+            <button mat-stroked-button color="primary" (click)="onEdit()">
+              <mat-icon>edit</mat-icon> Edit Product
+            </button>
+            <button mat-stroked-button color="warn" (click)="onDelete()">
+              <mat-icon>delete_outline</mat-icon> Delete Product
+            </button>
+          </div>
+        </div>
+
       </div>
-
-      <div class="description">
-        <h3>Description</h3>
-        <p>{{ product.description }}</p>
-      </div>
-
-      <div class="seller-info">
-        <strong>Sold by:</strong> {{ product.sellerFirstName }} {{ product.sellerLastName }}
-        <span>({{ product.sellerEmail }})</span>
-      </div>
-
-      <div class="cart-actions" *ngIf="canAddToCart() && product.quantity > 0">
-        <button mat-raised-button color="accent" (click)="onAddToCart()">
-          <mat-icon>add_shopping_cart</mat-icon>
-          Add to Cart
-        </button>
-      </div>
-
-      <div class="out-of-stock-container" *ngIf="product.quantity === 0">
-        <p class="out-of-stock-message">Out of Stock</p>
-      </div>
-
-      <div class="action-buttons" *ngIf="product.createdByMe">
-        <button mat-raised-button color="primary" (click)="onEdit()">
-          <mat-icon>edit</mat-icon>
-          Edit Product
-        </button>
-        <button mat-raised-button color="warn" (click)="onDelete()">
-          <mat-icon>delete</mat-icon>
-          Delete Product
-        </button>
-      </div>
-
     </div>
 
   </div>
