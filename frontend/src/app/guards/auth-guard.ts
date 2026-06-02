@@ -13,10 +13,10 @@ export class AuthGuard implements CanActivate {
     const isLoggedIn = this.cookieService.check('jwt');
 
     if (isLoggedIn) {
-      this.router.navigate(['/home']); 
-      return false; 
+      this.router.navigate(['/home']); // If logged in, redirect to home
+      return false; // Prevent access to the login/register page
     }
 
-    return true; 
+    return true; // If not logged in, allow access
   }
 }

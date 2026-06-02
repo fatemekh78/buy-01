@@ -1,22 +1,22 @@
+// src/app/components/product-card/product-card.component.ts
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, HostListener } from '@angular/core';
-import { CommonModule, CurrencyPipe } from '@angular/common';
+import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { ProductCardDTO } from '../../models/productCard.model'; // Adjust path
+import { CurrencyPipe } from '@angular/common'; // For the price
 import { Router, RouterLink } from '@angular/router';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { ConfirmDialog } from '../confirm-dialog/confirm-dialog';
+import { ProductService } from '../../services/product-service';
+import { EditProductModal } from '../edit-product-modal/edit-product-modal';
+import { ProductDetailDTO, MediaUploadResponseDTO } from '../../models/product.model';
+import { AuthService } from '../../services/auth';
+import { AddToCartDialog } from '../add-to-cart-dialog/add-to-cart-dialog';
+import { OrderService } from '../../services/order.service';
 import { throwError } from 'rxjs';
 import { switchMap, take } from 'rxjs/operators';
-
-import { ProductCardDTO } from '../../models/productCard.model';
-import { ProductDetailDTO } from '../../models/product.model';
-import { ConfirmDialog } from '../confirm-dialog/confirm-dialog';
-import { EditProductModal } from '../edit-product-modal/edit-product-modal';
-import { AddToCartDialog } from '../add-to-cart-dialog/add-to-cart-dialog';
-import { ProductService } from '../../services/product-service';
-import { AuthService } from '../../services/auth';
-import { OrderService } from '../../services/order.service';
-
 @Component({
   selector: 'app-product-card',
   standalone: true,
@@ -27,21 +27,24 @@ import { OrderService } from '../../services/order.service';
     MatIconModule,
     CurrencyPipe,
     MatDialogModule,
+    EditProductModal
   ],
   templateUrl: './product-card.html',
-  styleUrls: ['./product-card.scss'] // Updated to SCSS
+  styleUrls: ['./product-card.css']
 })
-export class ProductCard implements OnInit, OnDestroy {
+export class ProductCard implements OnInit, OnDestroy { // <-- Implement interfaces
+
   @Input() product: ProductCardDTO | null = null;
   @Output() edit = new EventEmitter<void>();
   @Output() delete = new EventEmitter<void>();
 
+  // --- New Carousel Logic ---
   currentImageIndex = 0;
   imageChangeInterval: any = null;
+  // -------------------------
   public currentUserRole: string | null = null;
 
-  constructor(
-    private router: Router,
+  constructor(private router: Router,
     private productService: ProductService,
     public dialog: MatDialog,
     private authService: AuthService,
@@ -53,42 +56,52 @@ export class ProductCard implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    // Start the carousel when the component loads
     this.startImageCarousel();
   }
 
   ngOnDestroy(): void {
+    // Clear the timer when the component is destroyed
     if (this.imageChangeInterval) {
       clearInterval(this.imageChangeInterval);
     }
   }
 
   startImageCarousel(): void {
+    // Only start if there's more than one image
     if (this.product && this.product.imageUrls && this.product.imageUrls.length > 1) {
       this.imageChangeInterval = setInterval(() => {
+        // This moves to the next image, wrapping around to 0
         if (this.product && this.product.imageUrls) {
           this.currentImageIndex = (this.currentImageIndex + 1) % this.product.imageUrls.length;
         }
-      }, 3000);
+      }, 3000); // Change image every 3 seconds
     }
   }
 
+  // --- Optional: Pause carousel on hover ---
   @HostListener('mouseenter')
   onMouseEnter(): void {
-    if (this.imageChangeInterval) clearInterval(this.imageChangeInterval);
+    if (this.imageChangeInterval) {
+      clearInterval(this.imageChangeInterval);
+    }
   }
 
   @HostListener('mouseleave')
   onMouseLeave(): void {
-    this.startImageCarousel();
+    this.startImageCarousel(); // Restart when mouse leaves
   }
+  // ------------------------------------------
 
   onAddToCart(event: MouseEvent): void {
     event.stopPropagation();
     if (!this.product) return;
 
+    // Fetch full product details for stock info
     this.productService.getProductById(this.product.id).subscribe({
       next: (fullProduct) => {
         const dialogRef = this.dialog.open(AddToCartDialog, {
+          width: '400px',
           data: {
             productId: this.product!.id,
             productName: this.product!.name,
@@ -102,12 +115,17 @@ export class ProductCard implements OnInit, OnDestroy {
           const quantityValue = typeof result === 'number' ? result : result?.quantity;
           const quantity = Number(quantityValue);
 
-          if (!result || !Number.isFinite(quantity) || quantity < 1) return;
+          if (!result || !Number.isFinite(quantity) || quantity < 1) {
+            return;
+          }
 
           this.authService.currentUser$.pipe(
             take(1),
             switchMap(user => {
-              if (!user) return throwError(() => new Error('User not authenticated'));
+              if (!user) {
+                return throwError(() => new Error('User not authenticated'));
+              }
+
               return this.orderService.getOrCreateCart(user.id, 'Default Address');
             }),
             switchMap(cart => this.orderService.addItemToOrder(cart.id, {
@@ -115,7 +133,10 @@ export class ProductCard implements OnInit, OnDestroy {
               quantity
             }))
           ).subscribe({
-            next: (updatedCart) => this.orderService.cartSubject.next(updatedCart),
+            next: (updatedCart) => {
+              console.log('Item added to cart', updatedCart);
+              this.orderService.cartSubject.next(updatedCart);
+            },
             error: (err) => console.error('Failed to add item to cart', err)
           });
         });
@@ -124,54 +145,70 @@ export class ProductCard implements OnInit, OnDestroy {
     });
   }
 
-  // 🚨 FIX: Strict relative pathing for Nginx
+  // Helper to get the image URL (unchanged)
   getImageUrl(imagePath: string): string {
-    if (!imagePath) return '';
-    return imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+    return `https://localhost:8443${imagePath}`;
   }
 
   onCardClick(): void {
-    if (this.product) this.router.navigate(['/product', this.product.id]);
+    if (this.product) {
+      this.router.navigate(['/product', this.product.id]);
+    }
   }
 
   onDelete(event: MouseEvent): void {
-    event.stopPropagation();
+    event.stopPropagation(); // Stop the card click
     if (!this.product) return;
 
+    // 1. Open the confirmation dialog
     const dialogRef = this.dialog.open(ConfirmDialog, {
+      width: '350px',
       data: {
         title: 'Delete Product',
-        message: `Are you sure you want to delete "${this.product.name}"? This action cannot be undone.`,
-        confirmText: 'Delete',
-        isDestructive: true // Turns the confirm button Red!
+        message: `Are you sure you want to delete "${this.product.name}"? This action cannot be undone.`
       }
     });
 
+    // 2. Listen for the dialog to close
     dialogRef.afterClosed().subscribe(result => {
+      // 3. If the user clicked "Delete" (result is true)
       if (result === true && this.product) {
         this.productService.deleteProduct(this.product.id).subscribe({
-          next: () => this.delete.emit(),
-          error: (err) => console.error('Failed to delete product', err)
+          next: (response) => {
+            console.log(response); // "Product deleted successfully"
+            // 4. Emit the (delete) event to tell the parent to refresh
+            this.delete.emit();
+          },
+          error: (err) => {
+            console.error('Failed to delete product', err);
+            // TODO: Show a snackbar or alert
+          }
         });
       }
     });
   }
-
   onEdit(event: MouseEvent): void {
-    event.stopPropagation();
+    event.stopPropagation(); // Stop the card click
     if (!this.product) return;
 
+    // 1. Fetch the *full* product details first
     this.productService.getProductById(this.product.id).subscribe({
       next: (fullProduct: ProductDetailDTO) => {
+        // 2. Open the modal
         const dialogRef = this.dialog.open(EditProductModal, {
+          width: '600px',
           data: { product: fullProduct }
         });
+        // 3. After modal closes, emit the 'edit' event
         dialogRef.afterClosed().subscribe(wasSuccessful => {
-          if (wasSuccessful) this.edit.emit();
+          if (wasSuccessful) {
+            this.edit.emit(); // <-- Emits void
+          }
         });
       },
       error: (err) => {
         console.error('Failed to fetch product details for editing', err);
+        alert('Could not open editor. Please try again.');
       }
     });
   }

@@ -1,76 +1,56 @@
-<mat-toolbar class="navbar-container">
+<mat-toolbar color="primary" class="navbar-container">
 
-  <div class="nav-left">
-    <button mat-icon-button (click)="toggleSidenav.emit()" class="menu-btn" aria-label="Toggle Menu">
-      <mat-icon>menu</mat-icon>
-    </button>
+  <button mat-icon-button (click)="toggleSidenav.emit()">
+    <mat-icon>menu</mat-icon>
+  </button>
 
-    <a routerLink="/home" class="brand-logo">
-      <mat-icon class="brand-icon">storefront</mat-icon>
-      <span>Buy-02</span>
-    </a>
-  </div>
+  <a routerLink="/home" class="brand-logo">My Site</a>
 
   <span class="spacer"></span>
 
   <ng-container *ngIf="currentUser$ | async as user; else loggedOutButtons">
 
     <ng-container *ngIf="user.role === 'CLIENT'">
-      <button mat-icon-button routerLink="/cart" class="cart-btn" [matBadge]="(cartItemCount$ | async) || 0"
-        matBadgeColor="accent" [matBadgeHidden]="((cartItemCount$ | async) || 0) === 0">
+      <button mat-icon-button routerLink="/cart" [matBadge]="(cartItemCount$ | async) || 0" matBadgeColor="accent" [matBadgeHidden]="((cartItemCount$ | async) || 0) === 0">
         <mat-icon>shopping_cart</mat-icon>
       </button>
     </ng-container>
 
     <button mat-button [matMenuTriggerFor]="userMenu" class="user-menu-button">
-      <img *ngIf="user.role === 'SELLER' && user.avatarUrl" [src]="getAvatarUrl(user.avatarUrl)" alt="Shop Logo"
-        class="navbar-avatar-image">
 
-      <div class="user-info">
-        <span class="navbar-user-name">{{ user.firstName }} {{ user.lastName }}</span>
-        <span class="navbar-user-role">{{ user.role | titlecase }}</span>
-      </div>
-      <mat-icon class="dropdown-icon">arrow_drop_down</mat-icon>
+      <img *ngIf="user.role === 'SELLER' && user.avatarUrl"
+           [src]="getAvatarUrl(user.avatarUrl)"
+           alt="User Avatar"
+           class="navbar-avatar-image">
+
+      <span class="navbar-user-name">
+        {{ user.firstName }} {{ user.lastName }}
+      </span>
+
     </button>
 
-    <mat-menu #userMenu="matMenu" xPosition="before" class="custom-user-menu">
+    <mat-menu #userMenu="matMenu">
       <button mat-menu-item routerLink="/my-info">
         <mat-icon>person</mat-icon>
         <span>My Profile</span>
       </button>
-
       <ng-container *ngIf="user.role === 'CLIENT'">
         <button mat-menu-item routerLink="/my-orders">
           <mat-icon>history</mat-icon>
           <span>Order History</span>
         </button>
       </ng-container>
-
-      <ng-container *ngIf="user.role === 'SELLER'">
-        <button mat-menu-item routerLink="/my-products">
-          <mat-icon>inventory_2</mat-icon>
-          <span>Manage Inventory</span>
-        </button>
-        <button mat-menu-item routerLink="/my-stats">
-          <mat-icon>analytics</mat-icon>
-          <span>Shop Analytics</span>
-        </button>
-      </ng-container>
-
-      <mat-divider></mat-divider>
-
-      <button mat-menu-item (click)="onLogout()" class="logout-menu-item">
-        <mat-icon color="warn">exit_to_app</mat-icon>
-        <span class="text-warn">Logout</span>
+      <button mat-menu-item (click)="onLogout()">
+        <mat-icon>exit_to_app</mat-icon>
+        <span>Logout</span>
       </button>
     </mat-menu>
+
   </ng-container>
 
   <ng-template #loggedOutButtons>
-    <div class="auth-actions">
-      <button mat-button routerLink="/auth/login" class="login-btn">Login</button>
-      <button mat-flat-button routerLink="/auth/register" class="register-btn">Register</button>
-    </div>
+    <button mat-button routerLink="/login">Login</button>
+    <button mat-raised-button color="accent" routerLink="/register">Register</button>
   </ng-template>
 
 </mat-toolbar>

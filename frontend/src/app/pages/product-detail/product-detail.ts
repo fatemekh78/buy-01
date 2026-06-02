@@ -28,7 +28,7 @@ import { switchMap, take } from 'rxjs/operators';
     MatDialogModule
   ],
   templateUrl: './product-detail.html',
-  styleUrls: ['./product-detail.scss'] // Updated to SCSS
+  styleUrls: ['./product-detail.css']
 })
 export class ProductDetail implements OnInit {
   product: ProductDetailDTO | null = null;
@@ -38,10 +38,11 @@ export class ProductDetail implements OnInit {
   currentUserId: string | null = null;
   currentUserRole: string | null = null;
 
+
   constructor(
     private authService: AuthService,
     private route: ActivatedRoute,
-    public router: Router,
+    private router: Router,
     private productService: ProductService,
     public dialog: MatDialog,
     private orderService: OrderService
@@ -60,6 +61,8 @@ export class ProductDetail implements OnInit {
       this.productService.getProductById(id).subscribe({
         next: (data) => {
           this.product = data;
+          console.log(this.product);
+          // Set the first image as the default selected one
           if (data.media && data.media.length > 0) {
             this.selectedImageUrl = this.getFullImageUrl(data.media[0].fileUrl);
           }
@@ -74,14 +77,14 @@ export class ProductDetail implements OnInit {
     }
   }
 
+  // Helper to change the main displayed image
   selectImage(fileUrl: string): void {
     this.selectedImageUrl = this.getFullImageUrl(fileUrl);
   }
 
-  // 🚨 FIX: Strict relative pathing for Nginx Gateway
+  // Helper to build the full URL
   getFullImageUrl(path: string): string {
-    if (!path) return '/assets/placeholder.jpg';
-    return path.startsWith('/') ? path : `/${path}`;
+    return `https://localhost:8443${path}`;
   }
 
   canAddToCart(): boolean {
@@ -89,10 +92,15 @@ export class ProductDetail implements OnInit {
   }
 
   onAddToCart(): void {
-    if (!this.product) return;
+    if (!this.product) {
+      return;
+    }
 
     const productId = this.product.productId || this.product.id;
-    if (!productId) return;
+    if (!productId) {
+      console.warn('Cannot add product without an id');
+      return;
+    }
 
     const dialogRef = this.dialog.open(AddToCartDialog, {
       width: '400px',
@@ -106,18 +114,30 @@ export class ProductDetail implements OnInit {
     });
 
     dialogRef.afterClosed().subscribe(result => {
-      const quantity = Number(typeof result === 'number' ? result : result?.quantity);
-      if (!result || !Number.isFinite(quantity) || quantity < 1) return;
+      const quantityValue = typeof result === 'number' ? result : result?.quantity;
+      const quantity = Number(quantityValue);
+
+      if (!result || !Number.isFinite(quantity) || quantity < 1) {
+        return;
+      }
 
       this.authService.currentUser$.pipe(
         take(1),
         switchMap(user => {
-          if (!user) return throwError(() => new Error('User not authenticated'));
+          if (!user) {
+            return throwError(() => new Error('User not authenticated'));
+          }
+
           return this.orderService.getOrCreateCart(user.id, 'Default Address');
         }),
-        switchMap(cart => this.orderService.addItemToOrder(cart.id, { productId, quantity }))
+        switchMap(cart => this.orderService.addItemToOrder(cart.id, {
+          productId,
+          quantity
+        }))
       ).subscribe({
-        next: (updatedCart) => console.log('Item added to cart', updatedCart),
+        next: (updatedCart) => {
+          console.log('Item added to cart', updatedCart);
+        },
         error: (err) => console.error('Failed to add item from detail page:', err)
       });
     });
@@ -127,12 +147,15 @@ export class ProductDetail implements OnInit {
     if (!this.product) return;
 
     const dialogRef = this.dialog.open(EditProductModal, {
-      width: '650px',
-      data: { product: this.product } 
+      width: '600px',
+      data: { product: this.product } // We already have the full product data
     });
 
+    // After the modal closes, refresh this page's data
     dialogRef.afterClosed().subscribe(wasSuccessful => {
-      if (wasSuccessful) this.ngOnInit();
+      if (wasSuccessful) {
+        this.ngOnInit();
+      }
     });
   }
 
@@ -140,19 +163,24 @@ export class ProductDetail implements OnInit {
     if (!this.product) return;
 
     const dialogRef = this.dialog.open(ConfirmDialog, {
+      width: '350px',
       data: {
         title: 'Delete Product',
-        message: `Are you sure you want to delete "${this.product.name}"? This action cannot be undone.`,
-        confirmText: 'Delete',
-        isDestructive: true
+        message: `Are you sure you want to delete "${this.product.name}"? This action cannot be undone.`
       }
     });
 
     dialogRef.afterClosed().subscribe(result => {
       if (result === true && this.product) {
         this.productService.deleteProduct(this.product.productId).subscribe({
-          next: () => this.router.navigate(['/my-products']),
-          error: (err) => console.error('Failed to delete product', err)
+          next: (response) => {
+            console.log(response);
+            this.router.navigate(['/my-products']);
+          },
+          error: (err) => {
+            console.error('Failed to delete product', err);
+            // TODO: Show a snackbar or alert
+          }
         });
       }
     });

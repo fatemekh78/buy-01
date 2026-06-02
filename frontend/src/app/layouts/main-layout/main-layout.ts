@@ -1,10 +1,8 @@
 import { Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { MatSidenavModule } from '@angular/material/sidenav';
-
-// 🚨 FIX: Strictly adhering to your file naming conventions (no .component in path)
-import { Navbar } from '../../components/navbar/navbar'; 
-import { SidenavComponent } from '../../components/sidenav/sidenav'; 
+import { NavbarComponent } from '../../components/navbar/navbar.component';
+import { SidenavComponent } from '../../components/sidenav/sidenav.component';
 
 @Component({
   selector: 'app-main-layout',
@@ -12,10 +10,10 @@ import { SidenavComponent } from '../../components/sidenav/sidenav';
   imports: [
     RouterOutlet,
     MatSidenavModule,
-    Navbar,
+    NavbarComponent,
     SidenavComponent
   ],
   templateUrl: './main-layout.html',
-  styleUrls: ['./main-layout.scss'] // Updated to SCSS
+  styleUrls: ['./main-layout.css']
 })
 export class MainLayout { }

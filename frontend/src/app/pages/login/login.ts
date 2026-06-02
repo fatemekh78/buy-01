@@ -2,41 +2,42 @@ import { Component } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { CommonModule } from '@angular/common';
-import { AuthService } from '../../services/auth'; // Adjusted path
+import { AuthService } from '../../services/auth'; // Adjust path if needed
 
 @Component({
   selector: 'app-login',
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './login.html',
-  styleUrls: ['./login.scss'] // Updated to SCSS
+  styleUrls: ['./login.css']
 })
 export class LoginComponent {
   loginData = {
     email: '',
     password: ''
   };
-  
-  isLoading = false;
-  errorMessage = '';
-
   constructor(private authService: AuthService, private router: Router) { }
-
   onLogin() {
-    this.isLoading = true;
-    this.errorMessage = '';
-
     this.authService.login(this.loginData).subscribe({
       next: (response) => {
+        console.log('Login successful', response);
+        // Get current user role to navigate appropriately
         this.authService.fetchCurrentUser().subscribe({
-          next: () => this.router.navigate(['/home']),
-          error: () => this.router.navigate(['/home'])
+          next: (user) => {
+            console.log('User role:', user.role);
+            // Route all authenticated users to home
+            this.router.navigate(['/home']);
+          },
+          error: (err) => {
+            console.error('Failed to fetch user role', err);
+            // Even if fetchCurrentUser fails, navigate to home
+            this.router.navigate(['/home']);
+          }
         });
       },
       error: (err) => {
-        this.isLoading = false;
-        // The error.interceptor handles the snackbar, but we can also show it locally
-        this.errorMessage = 'Invalid email or password. Please try again.';
+        console.error('Login failed', err);
+        // Handle login error - don't navigate
       }
     });
   }

@@ -1,105 +1,110 @@
 <div class="home-container">
 
   <div *ngIf="currentUser" class="welcome-banner">
-    <div class="banner-content">
-      <h2>Welcome back, {{ currentUser.firstName }}!</h2>
-      <p>Discover the latest products and deals from our verified sellers.</p>
+    <h2>Welcome back, {{ currentUser.firstName }}!</h2>
+    <p>Check out the latest products from all our sellers.</p>
+  </div>
+  <div *ngIf="errorMessage" class="error-banner">
+    <p>{{ errorMessage }}</p>
+  </div>
+  <div *ngIf="filterError" class="error-banner">
+    <p>{{ filterError }}</p>
+  </div>
+
+  <!-- Search and Filter Section -->
+  <div class="search-filter-container">
+    <div class="search-box">
+      <input 
+        type="text" 
+        placeholder="Search by product name or description..." 
+        [(ngModel)]="searchKeyword"
+        class="search-input"
+      />
+    </div>
+
+    <div class="filter-controls">
+      <div class="filter-group">
+        <label>Price Range</label>
+        <div class="filter-inputs">
+          <input 
+            type="number" 
+            placeholder="Min Price" 
+            [(ngModel)]="minPrice"
+            min="0"
+            class="filter-input"
+          />
+          <input 
+            type="number" 
+            placeholder="Max Price" 
+            [(ngModel)]="maxPrice"
+            min="0"
+            class="filter-input"
+          />
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label>Quantity Available</label>
+        <div class="filter-inputs">
+          <input 
+            type="number" 
+            placeholder="Min Qty" 
+            [(ngModel)]="minQuantity"
+            min="0"
+            class="filter-input"
+          />
+          <input 
+            type="number" 
+            placeholder="Max Qty" 
+            [(ngModel)]="maxQuantity"
+            min="0"
+            class="filter-input"
+          />
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label>Product Date Range</label>
+        <div class="filter-inputs">
+          <input 
+            type="date" 
+            [(ngModel)]="startDate"
+            class="filter-input"
+          />
+          <input 
+            type="date" 
+            [(ngModel)]="endDate"
+            class="filter-input"
+          />
+        </div>
+      </div>
+
+      <div class="button-group">
+        <button (click)="onSearch()" class="btn-search">Search</button>
+        <button (click)="clearFilters()" class="btn-clear">Clear All</button>
+      </div>
     </div>
   </div>
-  
-  <div *ngIf="errorMessage" class="alert-banner error">
-    <mat-icon>error_outline</mat-icon> {{ errorMessage }}
-  </div>
-  <div *ngIf="filterError" class="alert-banner error">
-    <mat-icon>warning_amber</mat-icon> {{ filterError }}
-  </div>
-
-  <mat-card class="search-filter-card">
-    <mat-card-content>
-      
-      <mat-form-field appearance="outline" class="full-width search-box">
-        <mat-label>Search products...</mat-label>
-        <mat-icon matPrefix color="primary">search</mat-icon>
-        <input matInput type="text" [(ngModel)]="searchKeyword" (keyup.enter)="onSearch()">
-      </mat-form-field>
-
-      <div class="filter-controls">
-        
-        <div class="filter-group">
-          <mat-form-field appearance="outline" class="sm-field">
-            <mat-label>Min Price</mat-label>
-            <span matTextPrefix>$&nbsp;</span>
-            <input matInput type="number" [(ngModel)]="minPrice" min="0">
-          </mat-form-field>
-          <span class="divider">-</span>
-          <mat-form-field appearance="outline" class="sm-field">
-            <mat-label>Max Price</mat-label>
-            <span matTextPrefix>$&nbsp;</span>
-            <input matInput type="number" [(ngModel)]="maxPrice" min="0">
-          </mat-form-field>
-        </div>
-
-        <div class="filter-group">
-          <mat-form-field appearance="outline" class="sm-field">
-            <mat-label>Min Qty</mat-label>
-            <input matInput type="number" [(ngModel)]="minQuantity" min="0">
-          </mat-form-field>
-          <span class="divider">-</span>
-          <mat-form-field appearance="outline" class="sm-field">
-            <mat-label>Max Qty</mat-label>
-            <input matInput type="number" [(ngModel)]="maxQuantity" min="0">
-          </mat-form-field>
-        </div>
-
-        <div class="filter-group date-group">
-          <mat-form-field appearance="outline" class="sm-field">
-            <mat-label>From Date</mat-label>
-            <input matInput type="date" [(ngModel)]="startDate">
-          </mat-form-field>
-          <span class="divider">-</span>
-          <mat-form-field appearance="outline" class="sm-field">
-            <mat-label>To Date</mat-label>
-            <input matInput type="date" [(ngModel)]="endDate">
-          </mat-form-field>
-        </div>
-
-      </div>
-
-      <div class="filter-actions">
-        <button mat-button (click)="clearFilters()">Clear Filters</button>
-        <button mat-flat-button color="primary" (click)="onSearch()">
-          <mat-icon>filter_list</mat-icon> Apply Filters
-        </button>
-      </div>
-
-    </mat-card-content>
-  </mat-card>
 
   <div class="product-grid" *ngIf="products.length > 0; else noProducts">
+
     <app-product-card
       *ngFor="let product of products"
       [product]="product"
       (edit)="onProductUpdated()"
-      (delete)="onProductDeleted()">
+    (delete)="onProductDeleted()">
     </app-product-card>
   </div>
 
   <ng-template #noProducts>
-    <div class="empty-state">
-      <mat-icon>inventory_2</mat-icon>
-      <h3>No products found</h3>
-      <p>Try adjusting your search filters or check back later!</p>
-      <button mat-stroked-button color="primary" (click)="clearFilters()">Clear Search</button>
-    </div>
+    <p>No products have been listed yet. Check back soon!</p>
   </ng-template>
 
-  <div class="paginator-wrapper" *ngIf="totalElements > 0">
-    <mat-paginator
-      [length]="totalElements"
-      [pageSize]="pageSize"
-      [pageSizeOptions]="[10, 20, 50]"
-      (page)="onPageChange($event)">
-    </mat-paginator>
-  </div>
+  <mat-paginator
+    [length]="totalElements"
+    [pageSize]="pageSize"
+    [pageSizeOptions]="[5, 10, 20]"
+    (page)="onPageChange($event)">
+  </mat-paginator>
 
 </div>

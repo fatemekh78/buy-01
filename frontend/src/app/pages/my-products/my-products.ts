@@ -1,48 +1,38 @@
+// my-products.component.ts
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
-import { MatIconModule } from '@angular/material/icon';
-import { RouterLink } from '@angular/router';
-import { ProductService } from '../../services/product-service'; 
-import { ProductCardDTO } from '../../models/productCard.model'; 
+import { ProductService } from '../../services/product-service'; // Adjust path
+import { ProductCardDTO } from '../../models/productCard.model'; // You'll need to create this model
 import { ProductCard } from '../../components/product-card/product-card';
 import { AuthService } from '../../services/auth';
 
+// Create a model for the Page object
 export interface Page<T> {
   content: T[];
   totalElements: number;
   totalPages: number;
-  number: number; 
+  number: number; // Current page number
 }
 
 @Component({
   selector: 'app-my-products',
   standalone: true,
-  imports: [
-    CommonModule, 
-    MatCardModule, 
-    MatButtonModule, 
-    MatPaginatorModule, 
-    MatIconModule,
-    RouterLink,
-    ProductCard
-  ],
+  imports: [CommonModule, MatCardModule, MatButtonModule, MatPaginatorModule, ProductCard],
   templateUrl: './my-products.html',
-  styleUrls: ['./my-products.scss'] // Updated to SCSS
+  styleUrls: ['./my-products.css']
 })
 export class MyProducts implements OnInit {
   products: ProductCardDTO[] = [];
 
+  // Paginator properties
   totalElements: number = 0;
   pageSize: number = 10;
   pageIndex: number = 0;
 
-  constructor(
-    private productService: ProductService, 
-    private authService: AuthService
-  ) { }
+  constructor(private productService: ProductService, private authService: AuthService) { }
 
   ngOnInit(): void {
     this.fetchMyProducts();
@@ -50,15 +40,13 @@ export class MyProducts implements OnInit {
   }
 
   fetchMyProducts(): void {
-    this.productService.getMyProducts(this.pageIndex, this.pageSize).subscribe({
-      next: (page: Page<ProductCardDTO>) => {
-        this.products = page.content;
-        this.totalElements = page.totalElements;
-      },
-      error: (err) => console.error('Failed to fetch products', err)
+    this.productService.getMyProducts(this.pageIndex, this.pageSize).subscribe((page: Page<ProductCardDTO>) => {
+      this.products = page.content;
+      this.totalElements = page.totalElements;
     });
   }
 
+  // This is called by the <mat-paginator>
   onPageChange(event: PageEvent): void {
     this.pageIndex = event.pageIndex;
     this.pageSize = event.pageSize;
@@ -66,20 +54,21 @@ export class MyProducts implements OnInit {
   }
 
   onEdit(productId: string): void {
+    // Navigate to edit page
     console.log('Edit product:', productId);
   }
 
   onProductDeleted(): void {
+    console.log('Product deleted, refreshing list...');
     this.fetchMyProducts();
   }
 
-  onProductUpdated(): void {
-    this.fetchMyProducts();
-  }
-
-  // 🚨 FIX: Strict relative pathing for Nginx Gateway
+  // Helper to build the full URL for the image
   getImageUrl(imagePath: string): string {
-    if (!imagePath) return '';
-    return imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+    return `https://localhost:8443${imagePath}`;
+  }
+  onProductUpdated(): void {
+    console.log('Product was updated, refreshing list...');
+    this.fetchMyProducts();
   }
 }

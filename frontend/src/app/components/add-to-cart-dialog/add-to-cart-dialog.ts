@@ -28,7 +28,7 @@ export interface AddToCartDialogData {
         MatIconModule
     ],
     templateUrl: './add-to-cart-dialog.html',
-    styleUrls: ['./add-to-cart-dialog.scss'] // Updated to SCSS
+    styleUrls: ['./add-to-cart-dialog.css']
 })
 export class AddToCartDialog {
     quantity: number = 1;
@@ -38,7 +38,7 @@ export class AddToCartDialog {
         public dialogRef: MatDialogRef<AddToCartDialog>,
         @Inject(MAT_DIALOG_DATA) public data: AddToCartDialogData
     ) {
-        this.dialogRef.updateSize('450px'); // Slightly narrower for a tighter, cleaner look
+        this.dialogRef.updateSize('480px');
     }
 
     onCancel(): void {

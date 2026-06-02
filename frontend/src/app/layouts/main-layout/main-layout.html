@@ -4,15 +4,13 @@
     <app-sidenav (closeSidenav)="sidenav.close()"></app-sidenav>
   </mat-sidenav>
 
-  <mat-sidenav-content class="sidenav-content">
+  <mat-sidenav-content>
     <app-navbar (toggleSidenav)="sidenav.toggle()"></app-navbar>
     
-    <main class="main-content">
-      <div class="content-wrapper">
-        <router-outlet></router-outlet>
-      </div>
+    <main>
+      <router-outlet></router-outlet>
     </main>
 
   </mat-sidenav-content>
 
-</mat-sidenav-container>
+</mat-sidenav-container>    

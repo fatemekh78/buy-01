@@ -6,8 +6,6 @@ import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatDividerModule } from '@angular/material/divider';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { forkJoin } from 'rxjs';
 import { Order, OrderItem } from '../../models/order.model';
@@ -16,16 +14,21 @@ import { AuthService } from '../../services/auth';
 import { ProductService } from '../../services/product-service';
 import { ProductDetailDTO } from '../../models/product.model';
 
-
 @Component({
     selector: 'app-cart',
     standalone: true,
     imports: [
-        CommonModule, FormsModule, RouterLink, MatCardModule, 
-        MatButtonModule, MatIconModule, MatInputModule, MatFormFieldModule, MatProgressSpinnerModule, MatDividerModule
+        CommonModule,
+        FormsModule,
+        RouterLink,
+        MatCardModule,
+        MatButtonModule,
+        MatIconModule,
+        MatInputModule,
+        MatFormFieldModule
     ],
     templateUrl: './cart.html',
-    styleUrls: ['./cart.scss']
+    styleUrls: ['./cart.css']
 })
 export class Cart implements OnInit {
     cart: Order | null = null;
@@ -44,50 +47,94 @@ export class Cart implements OnInit {
         this.authService.currentUser$.subscribe(user => {
             if (user?.id && user.role === 'CLIENT') {
                 this.userId = user.id;
+                // Fetch fresh cart data from backend when cart page is accessed
                 this.loadCart();
             }
         });
 
+        // Subscribe to cart updates from the service
+        // This will be updated whenever cart data is fetched or modified
         this.orderService.cart$.subscribe(cart => {
             this.cart = cart;
-            if (cart && cart.items.length > 0) this.populateProductDetails(cart.items);
+            if (cart && cart.items.length > 0) {
+                this.populateProductDetails(cart.items);
+            }
         });
     }
 
     loadCart(): void {
         if (!this.userId) return;
+
         this.isLoading = true;
         this.orderService.loadCart(this.userId).subscribe({
-            next: () => this.isLoading = false,
-            error: () => this.isLoading = false
+            next: () => {
+                this.isLoading = false;
+            },
+            error: (err) => {
+                console.error('Failed to load cart:', err);
+                this.isLoading = false;
+            }
         });
     }
 
     updateQuantity(item: OrderItem, newQuantity: number): void {
         const quantity = Number(newQuantity);
-        if (!this.cart || !Number.isFinite(quantity) || quantity < 1) return;
+        if (!this.cart || !Number.isFinite(quantity) || quantity < 1) {
+            return;
+        }
 
+        // Check stock availability
         this.productService.getProductById(item.productId).subscribe({
             next: (product) => {
                 if (quantity > product.quantity) {
                     alert(`Only ${product.quantity} items available in stock`);
                     return;
                 }
-                this.orderService.updateOrderItem(this.cart!.id, item.productId, { productId: item.productId, quantity }).subscribe();
+
+                const updatedItem: OrderItem = {
+                    productId: item.productId,
+                    quantity: quantity
+                };
+
+                this.orderService.updateOrderItem(this.cart!.id, item.productId, updatedItem).subscribe({
+                    error: (err) => {
+                        console.error('Failed to update item:', err);
+                        alert('Failed to update quantity');
+                    }
+                });
+            },
+            error: (err) => {
+                console.error('Failed to check stock:', err);
+                alert('Failed to verify stock availability');
             }
         });
     }
 
     removeItem(productId: string): void {
         if (!this.cart) return;
+
         if (confirm('Remove this item from cart?')) {
-            this.orderService.removeItemFromOrder(this.cart.id, productId).subscribe();
+            this.orderService.removeItemFromOrder(this.cart.id, productId).subscribe({
+                error: (err) => {
+                    console.error('Failed to remove item:', err);
+                    alert('Failed to remove item');
+                }
+            });
         }
     }
 
     clearCartItems(): void {
-        if (this.cart && confirm('Remove all items from cart?')) {
-            this.orderService.clearCartItems(this.cart.id).subscribe();
+        if (!this.cart || this.cart.items.length === 0) {
+            return;
+        }
+
+        if (confirm('Remove all items from cart?')) {
+            this.orderService.clearCartItems(this.cart.id).subscribe({
+                error: (err) => {
+                    console.error('Failed to clear cart:', err);
+                    alert('Failed to clear cart');
+                }
+            });
         }
     }
 
@@ -95,29 +142,66 @@ export class Cart implements OnInit {
         return this.cart ? this.cart.items.reduce((total, item) => total + this.getItemSubtotal(item), 0) : 0;
     }
 
-    // 🚨 FIX: Relative path for Nginx
     getImageUrl(productId: string): string {
         const detail = this.productDetails[productId];
-        return detail?.media?.[0]?.fileUrl ? detail.media[0].fileUrl : '/assets/placeholder.jpg';
+        if (detail && detail.media && detail.media.length > 0) {
+            return `https://localhost:8443${detail.media[0].fileUrl}`;
+        }
+        return 'https://localhost:8443/api/media/files/placeholder.jpg';
     }
 
     proceedToCheckout(): void {
-        if (!this.cart?.items.length) {
+        if (!this.cart || this.cart.items.length === 0) {
             alert('Add items to your cart before checking out.');
             return;
         }
-        this.router.navigate(['/checkout']);
+
+        if (!this.userId) {
+            alert('Please sign in again to continue with checkout.');
+            return;
+        }
+
+        // Ensure cart data is fresh before navigating
+        this.orderService.loadCart(this.userId).subscribe({
+            next: () => this.router.navigate(['/checkout']),
+            error: () => {
+                alert('Unable to load cart details. Please try again.');
+            }
+        });
     }
 
-    getProductName(productId: string): string { return this.productDetails[productId]?.name || 'Loading...'; }
-    getProductPrice(productId: string): number { return this.productDetails[productId]?.price || 0; }
-    getItemSubtotal(item: OrderItem): number { return this.getProductPrice(item.productId) * item.quantity; }
+    getProductName(productId: string): string {
+        const detail = this.productDetails[productId];
+        return detail ? detail.name : 'Loading...';
+    }
+
+    getProductPrice(productId: string): number {
+        const detail = this.productDetails[productId];
+        return detail ? detail.price : 0;
+    }
+
+    getItemSubtotal(item: OrderItem): number {
+        return this.getProductPrice(item.productId) * item.quantity;
+    }
 
     private populateProductDetails(items: OrderItem[]): void {
-        const idsToFetch = Array.from(new Set(items.map(i => i.productId))).filter(id => !this.productDetails[id]);
-        if (idsToFetch.length === 0) return;
-        forkJoin(idsToFetch.map(id => this.productService.getProductById(id))).subscribe(products => {
-            products.forEach(p => this.productDetails[p.productId || p.id!] = p);
+        const uniqueIds = Array.from(new Set(items.map(item => item.productId)));
+        const idsToFetch = uniqueIds.filter(id => !this.productDetails[id]);
+
+        if (idsToFetch.length === 0) {
+            return;
+        }
+
+        forkJoin(idsToFetch.map(id => this.productService.getProductById(id))).subscribe({
+            next: (products) => {
+                products.forEach(product => {
+                    const key = product.productId || product.id;
+                    if (key) {
+                        this.productDetails[key] = product;
+                    }
+                });
+            },
+            error: (err) => console.error('Failed to fetch product details for cart items:', err)
         });
     }
 }

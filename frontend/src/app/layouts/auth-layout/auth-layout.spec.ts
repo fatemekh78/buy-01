@@ -8,7 +8,6 @@ describe('AuthLayout', () => {
   let fixture: ComponentFixture<AuthLayout>;
 
   beforeEach(async () => {
-    // Note: RouterTestingModule is deprecated in Angular 18+, but perfectly fine for Angular 17/early 18 setups
     await TestBed.configureTestingModule({
       imports: [AuthLayout, RouterTestingModule, CommonModule]
     }).compileComponents();
