@@ -1,84 +1,89 @@
-// api-gateway/src/main/java/com/backend/api_gateway/exception/WebFluxGlobalExceptionHandler.java
-
 package com.backend.api_gateway.exception;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.web.reactive.error.ErrorWebExceptionHandler;
+import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Component;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.server.ServerWebExchange;
+import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.boot.web.reactive.error.ErrorWebExceptionHandler;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.ControllerAdvice;
-import org.springframework.web.bind.support.WebExchangeBindException;
-import org.springframework.web.multipart.MaxUploadSizeExceededException;
-import org.springframework.web.server.ServerWebExchange;
-
-import com.fasterxml.jackson.core.JsonProcessingException;
-
-import jakarta.validation.ConstraintViolationException;
-import jakarta.ws.rs.NotFoundException;
-import reactor.core.publisher.Mono;
-
-@ControllerAdvice
+/**
+ * Global centralized exception handler for the reactive Spring Cloud Gateway.
+ * Intercepts all routing, filter, and security exceptions, formatting them into
+ * a standardized JSON response contract identical to the backend microservices.
+ */
+@Slf4j
+@Component
+@Order(-2) // Ensures this handler runs before Spring's DefaultErrorWebExceptionHandler
 public class WebFluxGlobalExceptionHandler implements ErrorWebExceptionHandler {
 
-    private static final Logger log = LoggerFactory.getLogger(WebFluxGlobalExceptionHandler.class);
+    private final ObjectMapper objectMapper;
+
+    public WebFluxGlobalExceptionHandler(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
 
     @Override
     public Mono<Void> handle(ServerWebExchange exchange, Throwable ex) {
         HttpStatus status = HttpStatus.INTERNAL_SERVER_ERROR;
-        Map<String, Object> body = new HashMap<>();
+        String message = "An unexpected error occurred in the API Gateway.";
 
+        // 1. Handle Custom Gateway Exceptions
         if (ex instanceof CustomException c) {
             status = c.getStatus();
-            body.put("message", c.getMessage());
-        } else if (ex instanceof MethodArgumentNotValidException m) {
-            status = HttpStatus.BAD_REQUEST;
-            Map<String, String> errors = new HashMap<>();
-            m.getBindingResult().getFieldErrors().forEach(e -> errors.put(e.getField(), e.getDefaultMessage()));
-            body.put("errors", errors);
-        } else if (ex instanceof ConstraintViolationException c) {
-            status = HttpStatus.BAD_REQUEST;
-            Map<String, String> errors = new HashMap<>();
-            c.getConstraintViolations().forEach(v -> errors.put(v.getPropertyPath().toString(), v.getMessage()));
-            body.put("errors", errors);
-        } else if (ex instanceof WebExchangeBindException w) {
-            status = HttpStatus.BAD_REQUEST;
-            Map<String, String> errors = new HashMap<>();
-            w.getFieldErrors().forEach(e -> errors.put(e.getField(), e.getDefaultMessage()));
-            body.put("errors", errors);
-        } else if (ex instanceof MaxUploadSizeExceededException) {
-            status = HttpStatus.PAYLOAD_TOO_LARGE;
-            body.put("message", "File size exceeds 2 MB limit.");
-        } else if (ex instanceof InvalidFileTypeException i) {
-            status = HttpStatus.BAD_REQUEST;
-            body.put("message", i.getMessage());
-        } else if (ex instanceof NotFoundException) {
-            status = HttpStatus.NOT_FOUND;
-            body.put("message", "Endpoint not found");
-        } else {
-            log.error("Unexpected error: ", ex);
-            body.put("message", "Unexpected error.");
+            message = c.getMessage();
+            log.warn("Gateway rule exception ({}): {}", status, message);
+        } 
+        // 2. Handle Spring WebFlux/Gateway Native Exceptions (e.g., 404 Not Found, 413 Payload Too Large)
+        else if (ex instanceof ResponseStatusException rse) {
+            status = HttpStatus.valueOf(rse.getStatusCode().value());
+            message = rse.getReason();
+            log.warn("Gateway routing/filter exception ({}): {}", status, message);
+        } 
+        // 3. Catch-All for Critical Server Crashes
+        else {
+            log.error("CRITICAL: Unhandled API Gateway exception for URI {}", exchange.getRequest().getURI(), ex);
         }
 
-        body.put("timestamp", LocalDateTime.now());
+        return writeResponse(exchange, status, message);
+    }
+
+    /**
+     * Constructs the standardized JSON error payload and writes it to the reactive response stream.
+     *
+     * @param exchange The current web exchange.
+     * @param status   The resolved HTTP status code.
+     * @param message  The client-facing error message.
+     * @return Mono<Void> indicating the response has been fully written.
+     */
+    @SuppressWarnings("null")
+    private Mono<Void> writeResponse(ServerWebExchange exchange, HttpStatus status, String message) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("timestamp", LocalDateTime.now().toString());
         body.put("status", status.value());
         body.put("error", status.getReasonPhrase());
+        body.put("message", message);
 
         exchange.getResponse().setStatusCode(status);
         exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
+
         try {
-            return exchange.getResponse()
-                    .writeWith(Mono.just(exchange.getResponse()
-                            .bufferFactory().wrap(
-                                    new com.fasterxml.jackson.databind.ObjectMapper()
-                                            .writeValueAsBytes(body))));
+            byte[] bytes = objectMapper.writeValueAsBytes(body);
+            return exchange.getResponse().writeWith(
+                    Mono.just(exchange.getResponse().bufferFactory().wrap(bytes))
+            );
         } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
+            log.error("Failed to serialize error response", e);
+            return Mono.error(e);
         }
     }
 }

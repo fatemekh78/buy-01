@@ -6,11 +6,13 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import lombok.Builder;
+import lombok.Data;
 
 import java.util.ArrayList;
 import java.util.List;
 
 @Builder
+@Data
 public class ClientProductDTO {
     @NotBlank(message = "Name is mandatory")
     @Size(min = 3, max = 100, message = "Name should have 3-100 characters")

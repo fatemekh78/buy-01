@@ -7,8 +7,12 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.data.domain.AuditorAware;
 import org.springframework.data.mongodb.config.EnableMongoAuditing;
 
+/**
+ * Configuration for MongoDB.
+ * Enables automatic population of @CreatedDate and @LastModifiedDate fields on documents.
+ */
 @Configuration
-@EnableMongoAuditing // Enable automatic @CreatedDate and @LastModifiedDate annotation processing
+@EnableMongoAuditing
 public class MongoConfig {
 
     @Bean

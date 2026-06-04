@@ -1,20 +1,20 @@
 package com.backend.user_service.controller;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -22,230 +22,182 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.mock.web.MockHttpServletResponse;
-import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.backend.common.dto.InfoUserDTO;
+import com.backend.common.exception.CustomException;
 import com.backend.user_service.dto.UpdateUserDTO;
 import com.backend.user_service.service.UserService;
+import com.backend.user_service.service.UserService.UserUpdateResult;
 
 import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletResponse;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("UserController Unit Tests (Pure Mockito)")
 class UserControllerTest {
 
     @Mock
     private UserService userService;
 
-    @Mock
-    private AuthenticationManager authenticationManager;
-
     @InjectMocks
     private UserController userController;
 
-    private MockHttpServletResponse response;
+    private InfoUserDTO mockUser;
 
     @BeforeEach
     void setUp() {
-        response = new MockHttpServletResponse();
+        mockUser = new InfoUserDTO();
+        mockUser.setEmail("test@example.com");
+        mockUser.setFirstName("John");
+        mockUser.setLastName("Doe");
     }
 
+    // ────────────────────────────────────────────────────────────────
+    // GET /me
+    // ────────────────────────────────────────────────────────────────
     @Test
-    void testHandleUserLogout_Success() {
-        // Arrange
-        when(userService.generateEmptyCookie()).thenReturn(new jakarta.servlet.http.Cookie("token", ""));
+    @DisplayName("getMe - Should return user details successfully")
+    void getMe_Success() {
+        when(userService.getUserById("user123")).thenReturn(mockUser);
 
-        // Act
-        ResponseEntity<Map<String, String>> result = userController.handleUserLogout(response);
+        ResponseEntity<InfoUserDTO> response = userController.getMe("user123");
 
-        // Assert
-        assertNotNull(result);
-        assertEquals(HttpStatus.OK, result.getStatusCode());
-        assertEquals("Logout successful", result.getBody().get("message"));
-        verify(userService, times(1)).generateEmptyCookie();
-    }
-
-    @Test
-    void testHandleUserNewAvatar_Success() {
-        // Arrange
-        String userId = "user123";
-        MockMultipartFile avatarFile = new MockMultipartFile(
-                "avatar",
-                "avatar.jpg",
-                "image/jpeg",
-                "test image content".getBytes());
-
-        doNothing().when(userService).AvatarUpdate(anyString(), any());
-
-        // Act
-        ResponseEntity<Map<String, String>> result = userController.handleUserNewAvatar(avatarFile, userId);
-
-        // Assert
-        assertNotNull(result);
-        assertEquals(HttpStatus.OK, result.getStatusCode());
-        assertEquals("Avatar updated successfully", result.getBody().get("message"));
-        verify(userService, times(1)).AvatarUpdate(userId, avatarFile);
-    }
-
-    @Test
-    void testHandleUserNewAvatar_InvalidUserId() {
-        // Arrange
-        String invalidUserId = null;
-        MockMultipartFile avatarFile = new MockMultipartFile(
-                "avatar",
-                "avatar.jpg",
-                "image/jpeg",
-                "test image content".getBytes());
-
-        doThrow(new IllegalArgumentException("User ID cannot be null"))
-                .when(userService).AvatarUpdate(isNull(), any());
-
-        // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
-            userController.handleUserNewAvatar(avatarFile, invalidUserId);
-        });
-    }
-
-    @Test
-    void testHandleUserNewAvatar_EmptyFile() {
-        // Arrange
-        String userId = "user123";
-        MockMultipartFile emptyFile = new MockMultipartFile(
-                "avatar",
-                "avatar.jpg",
-                "image/jpeg",
-                new byte[0]);
-
-        doThrow(new IllegalArgumentException("Avatar file cannot be empty"))
-                .when(userService).AvatarUpdate(anyString(), any());
-
-        // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
-            userController.handleUserNewAvatar(emptyFile, userId);
-        });
-    }
-
-    @Test
-    void testGetCurrentUser_Success() {
-        // Arrange
-        InfoUserDTO userDTO = InfoUserDTO.builder()
-                .id("user123")
-                .firstName("John")
-                .lastName("Doe")
-                .email("john@example.com")
-                .build();
-        when(userService.getMe("user123")).thenReturn(userDTO);
-
-        // Act
-        ResponseEntity<InfoUserDTO> result = userController.getCurrentUser("user123");
-
-        // Assert
-        assertNotNull(result);
-        assertEquals(HttpStatus.OK, result.getStatusCode());
-        assertEquals("john@example.com", result.getBody().getEmail());
-        verify(userService).getMe("user123");
-    }
-
-    @Test
-    void testGetUsersByIds_Success() {
-        // Arrange
-        InfoUserDTO userDTO = InfoUserDTO.builder()
-                .id("user123")
-                .firstName("John")
-                .lastName("Doe")
-                .email("john@example.com")
-                .build();
-        when(userService.getUserById("user123")).thenReturn(userDTO);
-
-        // Act
-        ResponseEntity<InfoUserDTO> result = userController.getUsersByIds("user123");
-
-        // Assert
-        assertNotNull(result);
-        assertEquals(HttpStatus.OK, result.getStatusCode());
-        assertEquals("user123", result.getBody().getId());
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("test@example.com", response.getBody().getEmail());
         verify(userService).getUserById("user123");
     }
 
+    // ────────────────────────────────────────────────────────────────
+    // PUT /me
+    // ────────────────────────────────────────────────────────────────
     @Test
-    void testUpdateMe_Success() {
-        // Arrange
+    @DisplayName("updateMe - Success WITHOUT email change (No new cookie)")
+    void updateMe_NoEmailChange_Success() {
         UpdateUserDTO updateDto = new UpdateUserDTO();
-        updateDto.setFirstName("Jane");
+        updateDto.setFirstName("Johnny");
+        
+        HttpServletResponse mockResponse = mock(HttpServletResponse.class);
+        UserUpdateResult mockResult = new UserUpdateResult(false, "test@example.com");
 
-        Cookie mockCookie = new Cookie("jwt", "token");
-        UserService.UserUpdateResult updateResult = new UserService.UserUpdateResult(true, "jane@example.com");
+        when(userService.updateUserInfo("user123", updateDto)).thenReturn(mockResult);
 
-        when(userService.updateUserInfo("user123", updateDto)).thenReturn(updateResult);
-        when(userService.generateCookie("jane@example.com")).thenReturn(mockCookie);
+        ResponseEntity<Map<String, String>> response = userController.updateMe(updateDto, "user123", mockResponse);
 
-        // Act
-        ResponseEntity<Map<String, String>> result = userController.updateMe(updateDto, "user123", response);
-
-        // Assert
-        assertNotNull(result);
-        assertEquals(HttpStatus.OK, result.getStatusCode());
-        assertEquals("updated successfully", result.getBody().get("message"));
-        verify(userService).updateUserInfo("user123", updateDto);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("Profile updated successfully", response.getBody().get("message"));
+        
+        // Verify no cookie was added since email didn't change
+        verifyNoInteractions(mockResponse); 
     }
 
     @Test
-    void testDeleteUser_Success() {
-        // Arrange
-        doNothing().when(userService).deleteUser("user123", "password123");
+    @DisplayName("updateMe - Success WITH email change (Generates new cookie)")
+    void updateMe_WithEmailChange_Success() {
+        UpdateUserDTO updateDto = new UpdateUserDTO();
+        updateDto.setEmail("new@example.com");
+        
+        HttpServletResponse mockResponse = mock(HttpServletResponse.class);
+        UserUpdateResult mockResult = new UserUpdateResult(true, "new@example.com");
+        Cookie mockCookie = new Cookie("jwt", "fake-token");
 
-        // Act
-        ResponseEntity<Map<String, String>> result = userController.deleteUser("user123", "password123");
+        when(userService.updateUserInfo("user123", updateDto)).thenReturn(mockResult);
+        when(userService.generateCookie("new@example.com")).thenReturn(mockCookie);
 
-        // Assert
-        assertNotNull(result);
-        assertEquals(HttpStatus.OK, result.getStatusCode());
-        assertEquals("user deleted successfully", result.getBody().get("message"));
-        verify(userService).deleteUser("user123", "password123");
+        ResponseEntity<Map<String, String>> response = userController.updateMe(updateDto, "user123", mockResponse);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("Profile updated successfully", response.getBody().get("message"));
+        
+        // Verify the controller added the new cookie to the response
+        verify(mockResponse).addCookie(mockCookie);
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // DELETE /
+    // ────────────────────────────────────────────────────────────────
+    @Test
+    @DisplayName("deleteUser - Should return success message on valid deletion")
+    void deleteUser_Success() {
+        doNothing().when(userService).deleteUser("user123", "myPassword123");
+
+        ResponseEntity<Map<String, String>> response = userController.deleteUser("user123", "myPassword123");
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("User account deleted successfully", response.getBody().get("message"));
+        verify(userService).deleteUser("user123", "myPassword123");
     }
 
     @Test
-    void testDeleteAvatar_Success() {
-        // Arrange
+    @DisplayName("deleteUser - Should bubble up exception on invalid password")
+    void deleteUser_InvalidPassword_ThrowsException() {
+        doThrow(new CustomException("Invalid password", HttpStatus.FORBIDDEN))
+                .when(userService).deleteUser("user123", "wrongPassword");
+
+        assertThrows(CustomException.class, () -> {
+            userController.deleteUser("user123", "wrongPassword");
+        });
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // DELETE /avatar
+    // ────────────────────────────────────────────────────────────────
+    @Test
+    @DisplayName("deleteAvatar - Should return success string")
+    void deleteAvatar_Success() {
         doNothing().when(userService).deleteAvatar("user123");
 
-        // Act
-        ResponseEntity<String> result = userController.deleteAvatar("user123");
+        ResponseEntity<String> response = userController.deleteAvatar("user123");
 
-        // Assert
-        assertNotNull(result);
-        assertEquals(HttpStatus.OK, result.getStatusCode());
-        assertEquals("avatar deleted successfully", result.getBody());
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("Avatar deleted successfully", response.getBody());
         verify(userService).deleteAvatar("user123");
     }
 
+    // ────────────────────────────────────────────────────────────────
+    // GET /seller
+    // ────────────────────────────────────────────────────────────────
     @Test
-    void testGetUsersByEmail_Success() {
-        // Arrange
-        InfoUserDTO userDTO = InfoUserDTO.builder()
-                .id("user123")
-                .firstName("John")
-                .lastName("Doe")
-                .email("john@example.com")
-                .build();
-        when(userService.getUserByEmail("john@example.com")).thenReturn(userDTO);
+    @DisplayName("getSellerById - Should return seller details")
+    void getSellerById_Success() {
+        when(userService.getUserById("seller123")).thenReturn(mockUser);
 
-        // Act
-        ResponseEntity<InfoUserDTO> result = userController.getUsersByEmail("john@example.com");
+        ResponseEntity<InfoUserDTO> response = userController.getSellerById("seller123");
 
-        // Assert
-        assertNotNull(result);
-        assertEquals(HttpStatus.OK, result.getStatusCode());
-        assertEquals("john@example.com", result.getBody().getEmail());
-        verify(userService).getUserByEmail("john@example.com");
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("test@example.com", response.getBody().getEmail());
+        verify(userService).getUserById("seller123");
     }
 
-    // Removed registration test: UserController does not expose registration
-    // endpoint.
+    // ────────────────────────────────────────────────────────────────
+    // GET /email
+    // ────────────────────────────────────────────────────────────────
+    @Test
+    @DisplayName("getUsersByEmail - Should return user details")
+    void getUsersByEmail_Success() {
+        when(userService.getUserByEmail("test@example.com")).thenReturn(mockUser);
 
-    // Removed login success test: UserController does not expose login endpoint.
+        ResponseEntity<InfoUserDTO> response = userController.getUsersByEmail("test@example.com");
 
-    // Removed login bad credentials test: UserController does not expose login
-    // endpoint.
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("test@example.com", response.getBody().getEmail());
+        verify(userService).getUserByEmail("test@example.com");
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // POST /newAvatar
+    // ────────────────────────────────────────────────────────────────
+    @Test
+    @DisplayName("handleUserNewAvatar - Should accept file and return success map")
+    void handleUserNewAvatar_Success() {
+        MultipartFile mockFile = mock(MultipartFile.class);
+
+        doNothing().when(userService).updateUserAvatar(eq("user123"), any(MultipartFile.class));
+
+        ResponseEntity<Map<String, String>> response = userController.handleUserNewAvatar(mockFile, "user123");
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("Avatar updated successfully", response.getBody().get("message"));
+        verify(userService).updateUserAvatar("user123", mockFile);
+    }
 }

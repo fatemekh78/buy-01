@@ -11,24 +11,30 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.web.SecurityFilterChain;
-import com.backend.common.config.filter.GatewayHeadersFilter;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+import com.backend.common.config.filter.GatewayHeadersFilter;
+
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
+
     @Autowired
     private GatewayHeadersFilter gatewayHeadersFilter;
+
     @Autowired
     private AuthenticationEntryPoint customAuthEntryPoint;
+
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
     @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration)
+            throws Exception {
         return authenticationConfiguration.getAuthenticationManager();
     }
 
@@ -37,14 +43,11 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .exceptionHandling(e -> e
-                        .authenticationEntryPoint(customAuthEntryPoint)
-                )
+                        .authenticationEntryPoint(customAuthEntryPoint))
                 .authorizeHttpRequests(auth -> auth
-                        .anyRequest().permitAll()
-                )
+                        .anyRequest().permitAll())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
-            http.addFilterBefore(gatewayHeadersFilter, UsernamePasswordAuthenticationFilter.class);
-        // The JWT filter should NOT be in this service.
+        http.addFilterBefore(gatewayHeadersFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 }

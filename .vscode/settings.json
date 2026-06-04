@@ -66,5 +66,6 @@
   "sonarlint.connectedMode.project": {
     "connectionId": "http-localhost-9000",
     "projectKey": "user-service"
-  }
+  },
+  "java.configuration.updateBuildConfiguration": "interactive"
 }

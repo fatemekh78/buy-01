@@ -28,7 +28,7 @@ import com.backend.media_service.repository.MediaRepository;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("MediaService Unit Tests")
-class MediaServiceUnitTest {
+class MediaServiceTest {
 
     @Mock
     private MediaRepository mediaRepository;
@@ -46,12 +46,14 @@ class MediaServiceUnitTest {
 
     @BeforeEach
     void setUp() {
-        testMedia = new Media();
-        testMedia.setId("media123");
-        testMedia.setImagePath("/api/media/files/image.jpg");
-        testMedia.setProductID("product123");
-        testMedia.setCreatedAt(Instant.now());
-        testMedia.setUpdatedAt(Instant.now());
+        // Utilizing the new @Builder pattern from the refactored model
+        testMedia = Media.builder()
+                .id("media123")
+                .imagePath("/api/media/files/image.jpg")
+                .productId("product123")
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
+                .build();
     }
 
     @Test
@@ -71,7 +73,7 @@ class MediaServiceUnitTest {
         // Assert
         assertThat(saved).isNotNull();
         assertThat(saved.getId()).isEqualTo("newMediaId");
-        assertThat(saved.getProductID()).isEqualTo("product123");
+        assertThat(saved.getProductId()).isEqualTo("product123");
         verify(fileStorageService).save(mockFile);
         verify(mediaRepository).save(any(Media.class));
     }
@@ -92,65 +94,55 @@ class MediaServiceUnitTest {
 
     @Test
     @DisplayName("Should find media by product ID successfully")
-    void testFindMediaByProductIDSuccess() {
+    void testFindMediaByProductIdSuccess() {
         // Arrange
-        Media media1 = new Media();
-        media1.setId("media1");
-        media1.setImagePath("/api/media/files/image1.jpg");
-        media1.setProductID("product123");
+        Media media1 = Media.builder().id("media1").imagePath("/api/media/files/image1.jpg").productId("product123")
+                .build();
+        Media media2 = Media.builder().id("media2").imagePath("/api/media/files/image2.jpg").productId("product123")
+                .build();
 
-        Media media2 = new Media();
-        media2.setId("media2");
-        media2.setImagePath("/api/media/files/image2.jpg");
-        media2.setProductID("product123");
-
-        when(mediaRepository.findByProductID("product123"))
+        when(mediaRepository.findByProductId("product123"))
                 .thenReturn(List.of(media1, media2));
 
         // Act
-        var result = mediaService.findMediaByProductID("product123");
+        var result = mediaService.findMediaByProductId("product123");
 
         // Assert
         assertThat(result).hasSize(2);
         assertThat(result.get(0).getFileUrl()).isEqualTo("/api/media/files/image1.jpg");
         assertThat(result.get(1).getFileUrl()).isEqualTo("/api/media/files/image2.jpg");
-        verify(mediaRepository).findByProductID("product123");
+        verify(mediaRepository).findByProductId("product123");
     }
 
     @Test
     @DisplayName("Should return empty list when no media found for product")
-    void testFindMediaByProductIDEmpty() {
+    void testFindMediaByProductIdEmpty() {
         // Arrange
-        when(mediaRepository.findByProductID("nonexistent"))
+        when(mediaRepository.findByProductId("nonexistent"))
                 .thenReturn(List.of());
 
         // Act
-        var result = mediaService.findMediaByProductID("nonexistent");
+        var result = mediaService.findMediaByProductId("nonexistent");
 
         // Assert
         assertThat(result).isEmpty();
-        verify(mediaRepository).findByProductID("nonexistent");
+        verify(mediaRepository).findByProductId("nonexistent");
     }
 
     @Test
     @DisplayName("Should delete media by product ID successfully")
-    void testDeleteMediaByProductIDSuccess() {
+    void testDeleteMediaByProductIdSuccess() {
         // Arrange
-        Media media1 = new Media();
-        media1.setId("media1");
-        media1.setImagePath("/api/media/files/image1.jpg");
-        media1.setProductID("product123");
+        Media media1 = Media.builder().id("media1").imagePath("/api/media/files/image1.jpg").productId("product123")
+                .build();
+        Media media2 = Media.builder().id("media2").imagePath("/api/media/files/image2.jpg").productId("product123")
+                .build();
 
-        Media media2 = new Media();
-        media2.setId("media2");
-        media2.setImagePath("/api/media/files/image2.jpg");
-        media2.setProductID("product123");
-
-        when(mediaRepository.findByProductID("product123"))
+        when(mediaRepository.findByProductId("product123"))
                 .thenReturn(List.of(media1, media2));
 
         // Act
-        mediaService.DeleteMediaByProductID("product123");
+        mediaService.deleteMediaByProductId("product123");
 
         // Assert
         verify(fileStorageService).delete("/api/media/files/image1.jpg");
@@ -160,27 +152,29 @@ class MediaServiceUnitTest {
 
     @Test
     @DisplayName("Should handle deletion when no media exists for product")
-    void testDeleteMediaByProductIDEmpty() {
+    void testDeleteMediaByProductIdEmpty() {
         // Arrange
-        when(mediaRepository.findByProductID("product123")).thenReturn(List.of());
+        when(mediaRepository.findByProductId("product123")).thenReturn(List.of());
 
         // Act
-        mediaService.DeleteMediaByProductID("product123");
+        mediaService.deleteMediaByProductId("product123");
 
         // Assert
         verify(fileStorageService, never()).delete(anyString());
-        verify(mediaRepository).deleteAll(List.of());
+
+        // ✅ THE FIX: Expect that deleteAll is NEVER called!
+        verify(mediaRepository, never()).deleteAll(any());
     }
 
     @Test
     @DisplayName("Should delete media by ID successfully")
-    void testDeleteMediaByIDSuccess() {
+    void testDeleteMediaByIdSuccess() {
         // Arrange
         when(mediaRepository.findById("media123"))
                 .thenReturn(Optional.of(testMedia));
 
         // Act
-        mediaService.DeleteMediaByID("media123");
+        mediaService.deleteMediaById("media123");
 
         // Assert
         verify(mediaRepository).findById("media123");
@@ -190,13 +184,13 @@ class MediaServiceUnitTest {
 
     @Test
     @DisplayName("Should throw exception when media ID not found")
-    void testDeleteMediaByIDNotFound() {
+    void testDeleteMediaByIdNotFound() {
         // Arrange
         when(mediaRepository.findById("nonexistent"))
                 .thenThrow(new CustomException("Media Not Found!", null));
 
         // Act & Assert
-        assertThatThrownBy(() -> mediaService.DeleteMediaByID("nonexistent"))
+        assertThatThrownBy(() -> mediaService.deleteMediaById("nonexistent"))
                 .isInstanceOf(CustomException.class)
                 .hasMessageContaining("Media Not Found!");
 
@@ -208,7 +202,7 @@ class MediaServiceUnitTest {
     @DisplayName("Should delete media by avatar URL successfully")
     void testDeleteMediaByAvatarUrlSuccess() {
         // Act
-        mediaService.DeleteMediaByAvatarUrl("/uploads/avatar.jpg");
+        mediaService.deleteMediaByAvatarUrl("/uploads/avatar.jpg");
 
         // Assert
         verify(fileStorageService).delete("/uploads/avatar.jpg");
@@ -216,10 +210,10 @@ class MediaServiceUnitTest {
 
     @Test
     @DisplayName("Should verify media has product ID")
-    void testMediaHasProductID() {
+    void testMediaHasProductId() {
         // Assert
-        assertThat(testMedia.getProductID()).isNotNull();
-        assertThat(testMedia.getProductID()).isEqualTo("product123");
+        assertThat(testMedia.getProductId()).isNotNull();
+        assertThat(testMedia.getProductId()).isEqualTo("product123");
     }
 
     @Test
@@ -248,7 +242,7 @@ class MediaServiceUnitTest {
 
     @Test
     @DisplayName("Should find media by ID successfully")
-    void testFindByIDSuccess() {
+    void testFindByIdSuccess() {
         // Arrange
         when(mediaRepository.findById("media123")).thenReturn(Optional.of(testMedia));
 
@@ -263,7 +257,7 @@ class MediaServiceUnitTest {
 
     @Test
     @DisplayName("Should return empty when media ID not found")
-    void testFindByIDNotFound() {
+    void testFindByIdNotFound() {
         // Arrange
         when(mediaRepository.findById("nonexistent")).thenReturn(Optional.empty());
 
@@ -279,9 +273,7 @@ class MediaServiceUnitTest {
     @DisplayName("Should save media successfully")
     void testSaveMediaSuccess() {
         // Arrange
-        Media newMedia = new Media();
-        newMedia.setImagePath("/api/media/files/new.jpg");
-        newMedia.setProductID("product456");
+        Media newMedia = Media.builder().imagePath("/api/media/files/new.jpg").productId("product456").build();
 
         when(mediaRepository.save(any(Media.class))).thenAnswer(inv -> {
             Media m = inv.getArgument(0);
@@ -302,15 +294,10 @@ class MediaServiceUnitTest {
     @DisplayName("Should update media successfully")
     void testUpdateMediaSuccess() {
         // Arrange
-        Media existingMedia = new Media();
-        existingMedia.setId("media123");
-        existingMedia.setImagePath("/api/media/files/old.jpg");
-        existingMedia.setProductID("product123");
-
-        Media updatedMedia = new Media();
-        updatedMedia.setId("media123");
-        updatedMedia.setImagePath("/api/media/files/updated.jpg");
-        updatedMedia.setProductID("product123");
+        Media existingMedia = Media.builder().id("media123").imagePath("/api/media/files/old.jpg")
+                .productId("product123").build();
+        Media updatedMedia = Media.builder().id("media123").imagePath("/api/media/files/updated.jpg")
+                .productId("product123").build();
 
         when(mediaRepository.save(any(Media.class))).thenReturn(updatedMedia);
 
@@ -331,25 +318,14 @@ class MediaServiceUnitTest {
         String productId = "product123";
         int limit = 3;
 
-        Media media1 = new Media();
-        media1.setId("media1");
-        media1.setImagePath("/api/media/files/image1.jpg");
-        media1.setProductID(productId);
-        media1.setCreatedAt(Instant.now().minusSeconds(300));
+        Media media1 = Media.builder().id("media1").imagePath("/api/media/files/image1.jpg").productId(productId)
+                .createdAt(Instant.now().minusSeconds(300)).build();
+        Media media2 = Media.builder().id("media2").imagePath("/api/media/files/image2.jpg").productId(productId)
+                .createdAt(Instant.now().minusSeconds(200)).build();
+        Media media3 = Media.builder().id("media3").imagePath("/api/media/files/image3.jpg").productId(productId)
+                .createdAt(Instant.now().minusSeconds(100)).build();
 
-        Media media2 = new Media();
-        media2.setId("media2");
-        media2.setImagePath("/api/media/files/image2.jpg");
-        media2.setProductID(productId);
-        media2.setCreatedAt(Instant.now().minusSeconds(200));
-
-        Media media3 = new Media();
-        media3.setId("media3");
-        media3.setImagePath("/api/media/files/image3.jpg");
-        media3.setProductID(productId);
-        media3.setCreatedAt(Instant.now().minusSeconds(100));
-
-        when(mediaRepository.findByProductID(eq(productId), any()))
+        when(mediaRepository.findByProductId(eq(productId), any()))
                 .thenReturn(List.of(media1, media2, media3));
 
         // Act
@@ -361,7 +337,7 @@ class MediaServiceUnitTest {
                 "/api/media/files/image1.jpg",
                 "/api/media/files/image2.jpg",
                 "/api/media/files/image3.jpg");
-        verify(mediaRepository).findByProductID(eq(productId), any());
+        verify(mediaRepository).findByProductId(eq(productId), any());
     }
 
     @Test
@@ -371,17 +347,12 @@ class MediaServiceUnitTest {
         String productId = "product123";
         int limit = 5;
 
-        Media media1 = new Media();
-        media1.setId("media1");
-        media1.setImagePath("/api/media/files/image1.jpg");
-        media1.setProductID(productId);
+        Media media1 = Media.builder().id("media1").imagePath("/api/media/files/image1.jpg").productId(productId)
+                .build();
+        Media media2 = Media.builder().id("media2").imagePath("/api/media/files/image2.jpg").productId(productId)
+                .build();
 
-        Media media2 = new Media();
-        media2.setId("media2");
-        media2.setImagePath("/api/media/files/image2.jpg");
-        media2.setProductID(productId);
-
-        when(mediaRepository.findByProductID(eq(productId), any()))
+        when(mediaRepository.findByProductId(eq(productId), any()))
                 .thenReturn(List.of(media1, media2));
 
         // Act
@@ -392,7 +363,7 @@ class MediaServiceUnitTest {
         assertThat(urls).containsExactly(
                 "/api/media/files/image1.jpg",
                 "/api/media/files/image2.jpg");
-        verify(mediaRepository).findByProductID(eq(productId), any());
+        verify(mediaRepository).findByProductId(eq(productId), any());
     }
 
     @Test
@@ -402,7 +373,7 @@ class MediaServiceUnitTest {
         String productId = "product123";
         int limit = 3;
 
-        when(mediaRepository.findByProductID(eq(productId), any()))
+        when(mediaRepository.findByProductId(eq(productId), any()))
                 .thenReturn(List.of());
 
         // Act
@@ -410,6 +381,6 @@ class MediaServiceUnitTest {
 
         // Assert
         assertThat(urls).isEmpty();
-        verify(mediaRepository).findByProductID(eq(productId), any());
+        verify(mediaRepository).findByProductId(eq(productId), any());
     }
 }

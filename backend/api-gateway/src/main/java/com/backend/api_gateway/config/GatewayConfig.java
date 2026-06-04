@@ -1,28 +1,31 @@
 package com.backend.api_gateway.config;
 
-import com.backend.api_gateway.util.JwtUtil;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import com.backend.api_gateway.util.JwtUtil;
+
 /**
- * Configuration class to explicitly register custom GatewayFilterFactory beans.
- * This resolves the "Unable to find GatewayFilterFactory" error by ensuring the
- * Authentication filter is correctly initialized as a Spring bean.
+ * Configuration class responsible for explicitly registering custom
+ * GatewayFilterFactory beans.
+ * Ensures that programmatic filters are properly injected into the Spring
+ * context for route resolution.
  */
 @Configuration
 public class GatewayConfig {
 
     private final JwtUtil jwtUtil;
 
-    // Inject JwtUtil dependency
     public GatewayConfig(JwtUtil jwtUtil) {
         this.jwtUtil = jwtUtil;
     }
 
     /**
-     * Registers the custom AuthenticationGatewayFilterFactory bean.
-     * The name of the bean method is irrelevant for discovery; only the return type matters.
-     * Spring Cloud Gateway will look for classes ending in *GatewayFilterFactory.
+     * Registers the AuthenticationGatewayFilterFactory.
+     * Spring Cloud Gateway dynamically maps this bean to the "Authentication"
+     * filter specified in routing rules.
+     *
+     * @return The configured AuthenticationGatewayFilterFactory.
      */
     @Bean
     public AuthenticationGatewayFilterFactory authenticationGatewayFilterFactory() {

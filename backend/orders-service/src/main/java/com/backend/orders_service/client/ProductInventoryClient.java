@@ -1,23 +1,30 @@
 package com.backend.orders_service.client;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
+import com.backend.common.exception.CustomException;
 import com.backend.orders_service.model.OrderItem;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class ProductInventoryClient {
+
     private final WebClient.Builder webClientBuilder;
+
+    // 🚨 FIX: Standardized internal Eureka HTTP routing
+    private static final String PRODUCT_SERVICE_URL = "http://product-service";
 
     public void decreaseStock(List<OrderItem> items) {
         if (items == null || items.isEmpty()) {
@@ -31,14 +38,19 @@ public class ProductInventoryClient {
         try {
             webClientBuilder.build()
                     .post()
-                    .uri("https://PRODUCT-SERVICE/api/products/adjust-stock")
+                    .uri(PRODUCT_SERVICE_URL + "/api/products/adjust-stock")
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(payload)
                     .retrieve()
                     .toBodilessEntity()
                     .block();
+
+            log.info("Successfully decreased stock for {} distinct items", payload.size());
+
         } catch (WebClientResponseException e) {
-            // Re-throw the exception with proper status so it can be handled by GlobalExceptionHandler
+            log.error("Failed to decrease stock: {}", e.getResponseBodyAsString());
+            // Re-throw so the OrderService can catch and format the exact product service
+            // error
             throw e;
         }
     }
@@ -55,44 +67,43 @@ public class ProductInventoryClient {
         try {
             webClientBuilder.build()
                     .post()
-                    .uri("https://PRODUCT-SERVICE/api/products/restock")
+                    .uri(PRODUCT_SERVICE_URL + "/api/products/restock")
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(payload)
                     .retrieve()
                     .toBodilessEntity()
                     .block();
+
+            log.info("Successfully restocked {} distinct items", payload.size());
+
         } catch (WebClientResponseException e) {
-            // Re-throw the exception with proper status so it can be handled by GlobalExceptionHandler
+            log.error("Failed to increase stock during cancellation: {}", e.getResponseBodyAsString());
             throw e;
         }
     }
 
     /**
-     * Get product details including current quantity available
+     * Get product details including current quantity available.
      */
     public ProductDetail getProductDetails(String productId) {
         try {
             return webClientBuilder.build()
                     .get()
-                    .uri("https://PRODUCT-SERVICE/api/products/{productId}", productId)
-                    .header("X-User-ID", "system") // Use system user for internal calls
+                    .uri(PRODUCT_SERVICE_URL + "/api/products/{productId}", productId)
+                    .header("X-User-ID", "system-service") // Bypasses auth requirements for internal traffic
                     .retrieve()
                     .bodyToMono(ProductDetail.class)
                     .block();
         } catch (WebClientResponseException e) {
-            // Product not found or error getting details
-            throw new RuntimeException("Failed to get product details for " + productId, e);
+            log.error("Failed to get details for product {}: {}", productId, e.getResponseBodyAsString());
+            throw new CustomException("Failed to get product details for ID: " + productId,
+                    HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
-    /**
-     * Get multiple product details in one call
-     */
-    public List<ProductDetail> getProductsDetails(List<String> productIds) {
-        return productIds.stream()
-                .map(this::getProductDetails)
-                .collect(Collectors.toList());
-    }
+    // ────────────────────────────────────────────────────────────────
+    // INNER DTOs
+    // ────────────────────────────────────────────────────────────────
 
     private record StockAdjustmentRequest(String productId, int quantity) {
     }
@@ -101,6 +112,7 @@ public class ProductInventoryClient {
     public static class ProductDetail {
         @JsonProperty("productId")
         private String productId;
+
         private String name;
         private String description;
         private Double price;

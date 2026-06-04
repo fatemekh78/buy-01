@@ -12,18 +12,26 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * A filtered view of an Order, specific to a single Seller.
+ * Excludes items from other sellers that may have been part of the same checkout cart.
+ */
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 public class SellerOrderDTO {
+    
     @JsonProperty("id")
     private String id;
+    
     private String orderId;
     private String userId;
     private List<OrderItem> items;
     private OrderStatus status;
     private Instant createdAt;
     private Instant updatedAt;
-    private String imageUrl; // Image URL of the first item in the order
+    
+    // Quick preview image (usually the first item in the seller's portion of the order)
+    private String imageUrl; 
 }

@@ -12,18 +12,22 @@ import com.backend.common.dto.Role;
 import com.backend.user_service.model.User;
 import com.backend.user_service.repository.UserRepository;
 
+/**
+ * Startup utility that ensures a root Administrator account exists in the
+ * database.
+ * Executes automatically upon application context initialization.
+ */
 @Component
 public class AdminUserInitializer implements CommandLineRunner {
 
     private static final Logger log = LoggerFactory.getLogger(AdminUserInitializer.class);
 
-    @SuppressWarnings("java:S2068") // False positive: comparing config constant
+    @SuppressWarnings("java:S2068")
     private static final String DEFAULT_ADMIN_PASSWORD = "CHANGE_ME_IN_PRODUCTION";
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
-    @SuppressWarnings("java:S2068") // False positive: injected from environment variable
     @Value("${app.admin.password:}")
     private String adminSecret;
 
@@ -37,35 +41,35 @@ public class AdminUserInitializer implements CommandLineRunner {
     }
 
     @Override
-    public void run(String... args) throws Exception {
-        // Check if the admin user already exists
-        if (userRepository.findByEmail(adminEmail).isEmpty()) {
-            log.info(">>> Admin user not found, creating one...");
+    public void run(String... args) {
+        try {
+            if (userRepository.findByEmail(adminEmail).isEmpty()) {
+                log.info("Admin user not found. Initiating creation protocol...");
 
-            // Use default if no credential configured
-            String secretValue = (adminSecret == null || adminSecret.isEmpty())
-                    ? DEFAULT_ADMIN_PASSWORD
-                    : adminSecret;
+                String secretValue = (adminSecret == null || adminSecret.isEmpty())
+                        ? DEFAULT_ADMIN_PASSWORD
+                        : adminSecret;
 
-            // Warn if using default credential
-            if (DEFAULT_ADMIN_PASSWORD.equals(secretValue)) { // S2068: comparing constants, not hardcoded credential
-                log.warn(
-                        "⚠️  WARNING: Admin password is set to default! Set 'app.admin.password' environment variable or application.yml");
+                if (DEFAULT_ADMIN_PASSWORD.equals(secretValue)) {
+                    log.warn("CRITICAL SECURITY WARNING: Admin password is set to default. " +
+                            "Please inject 'app.admin.password' via environment variables immediately.");
+                }
+
+                User adminUser = User.builder()
+                        .firstName("Admin")
+                        .lastName("User")
+                        .email(adminEmail)
+                        .password(passwordEncoder.encode(secretValue))
+                        .role(Role.ADMIN)
+                        .build();
+
+                userRepository.save(adminUser);
+                log.info("System administrator account provisioned successfully.");
+            } else {
+                log.debug("System administrator account verified.");
             }
-
-            User adminUser = User
-                    .builder()
-                    .firstName("Admin")
-                    .lastName("User")
-                    .email(adminEmail)
-                    .password(passwordEncoder.encode(secretValue))
-                    .role(Role.ADMIN)
-                    .build();
-
-            userRepository.save(adminUser);
-            System.out.println(">>> Admin user created successfully!");
-        } else {
-            System.out.println(">>> Admin user already exists.");
+        } catch (Exception e) {
+            log.error("Failed to execute AdminUserInitializer payload: {}", e.getMessage(), e);
         }
     }
 }
